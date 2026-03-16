@@ -6,5 +6,6 @@ build/
 worker-configuration.d.ts
 *.log
 .DS_Store
+wrangler.jsonc
 SEAN_GENERAL_SAAS_CLAUDE.md
 OAUTH_SETUP.md
