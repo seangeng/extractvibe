@@ -1,0 +1,71 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "extractvibe",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-03-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+
+  // D1 Database
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "extractvibe-db",
+      "database_id": "",
+      "migrations_dir": "server/db/migrations"
+    }
+  ],
+
+  // KV for caching extraction results
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "" }
+  ],
+
+  // R2 for storing extracted brand assets (logos, screenshots)
+  "r2_buckets": [
+    { "binding": "R2_BUCKET", "bucket_name": "extractvibe-assets" }
+  ],
+
+  // Browser Rendering for full-page extraction
+  "browser": {
+    "binding": "BROWSER"
+  },
+
+  // Workflows for multi-step extraction pipeline
+  "workflows": [
+    {
+      "name": "extract-brand-workflow",
+      "binding": "EXTRACT_BRAND",
+      "class_name": "ExtractBrandWorkflow"
+    }
+  ],
+
+  // Durable Objects for WebSocket progress
+  "durable_objects": {
+    "bindings": [
+      { "name": "JOB_PROGRESS", "class_name": "JobProgressDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["JobProgressDO"] }
+  ],
+
+  // Cron triggers (monthly credit reset)
+  "triggers": {
+    "crons": ["0 0 1 * *"]
+  },
+
+  "workers_dev": true,
+
+  // Custom domain
+  "routes": [
+    { "pattern": "extractvibe.com", "custom_domain": true },
+    { "pattern": "www.extractvibe.com", "custom_domain": true }
+  ],
+
+  // Environment variables (non-sensitive)
+  "vars": {
+    "ADMIN_USER_IDS": ""
+  }
+}

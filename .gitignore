@@ -1,0 +1,10 @@
+node_modules/
+build/
+.wrangler/
+.react-router/
+.dev.vars
+worker-configuration.d.ts
+*.log
+.DS_Store
+SEAN_GENERAL_SAAS_CLAUDE.md
+OAUTH_SETUP.md

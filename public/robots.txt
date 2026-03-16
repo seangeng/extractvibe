@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /api/
+Disallow: /dashboard/
+
+Sitemap: https://extractvibe.com/sitemap.xml
