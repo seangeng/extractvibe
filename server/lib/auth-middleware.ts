@@ -2,13 +2,16 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAuth } from "./auth";
 
-interface AuthResult {
+export interface AuthResult {
   authenticated: boolean;
   userId?: string;
+  plan?: string;
+  isAnonymous: boolean;
 }
 
 /**
- * Resolve the current user from either a session cookie or an API key header.
+ * Resolve the current user from session cookie, API key, or anonymous.
+ * Always returns — never throws. Anonymous requests get { isAnonymous: true }.
  */
 export async function resolveAuth(c: Context<{ Bindings: Env }>): Promise<AuthResult> {
   // 1. Try session cookie via Better Auth
@@ -19,10 +22,11 @@ export async function resolveAuth(c: Context<{ Bindings: Env }>): Promise<AuthRe
     });
 
     if (session?.user?.id) {
-      return { authenticated: true, userId: session.user.id };
+      const plan = await getUserPlan(c.env, session.user.id);
+      return { authenticated: true, userId: session.user.id, plan, isAnonymous: false };
     }
   } catch {
-    // Session resolution failed — continue to API key check
+    // Session resolution failed — continue
   }
 
   // 2. Try API key via x-api-key header
@@ -30,11 +34,27 @@ export async function resolveAuth(c: Context<{ Bindings: Env }>): Promise<AuthRe
   if (apiKey) {
     const result = await lookupApiKey(c.env, apiKey);
     if (result) {
-      return { authenticated: true, userId: result.userId };
+      const plan = await getUserPlan(c.env, result.userId);
+      return { authenticated: true, userId: result.userId, plan, isAnonymous: false };
     }
   }
 
-  return { authenticated: false };
+  // 3. Anonymous — not authenticated but allowed for some endpoints
+  return { authenticated: false, isAnonymous: true };
+}
+
+/**
+ * Require authentication — return 401 for anonymous requests.
+ */
+export async function requireAuth(c: Context<{ Bindings: Env }>): Promise<AuthResult> {
+  const auth = await resolveAuth(c);
+  if (!auth.authenticated) {
+    throw new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return auth;
 }
 
 /**
@@ -44,7 +64,6 @@ async function lookupApiKey(
   env: Env,
   key: string
 ): Promise<{ userId: string } | null> {
-  // Hash the provided key
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
   const hash = await crypto.subtle.digest("SHA-256", data);
@@ -58,12 +77,22 @@ async function lookupApiKey(
 
   if (!row) return null;
 
-  // Update last used timestamp (fire-and-forget)
+  // Update last used (fire-and-forget)
   env.DB.prepare(
     `UPDATE api_key SET "lastUsedAt" = datetime('now') WHERE "keyHash" = ?`
   ).bind(keyHash).run().catch(() => {});
 
   return { userId: row.userId };
+}
+
+/**
+ * Get a user's plan from the credit table.
+ */
+async function getUserPlan(env: Env, userId: string): Promise<string> {
+  const row = await env.DB.prepare(
+    `SELECT plan FROM credit WHERE "userId" = ?`
+  ).bind(userId).first<{ plan: string }>();
+  return row?.plan || "free";
 }
 
 /**

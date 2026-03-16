@@ -1,8 +1,37 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { resolveAuth } from "../lib/auth-middleware";
+import { resolveAuth, isAdminUser } from "../lib/auth-middleware";
+import {
+  checkRateLimit,
+  setRateLimitHeaders,
+  rateLimitResponse,
+  getClientId,
+  getTier,
+} from "../lib/rate-limit";
 
 export const apiRouter = new Hono<{ Bindings: Env }>();
+
+// ---------------------------------------------------------------------------
+// API Index
+// ---------------------------------------------------------------------------
+apiRouter.get("/", (c) => {
+  return c.json({
+    name: "ExtractVibe API",
+    version: "0.1.0",
+    docs: "https://extractvibe.com",
+    endpoints: {
+      health: "GET /api/health",
+      extract: "POST /api/extract",
+      status: "GET /api/extract/:jobId",
+      result: "GET /api/extract/:jobId/result",
+      export: "GET /api/extract/:jobId/export/:format",
+      brand: "GET /api/brand/:domain",
+      history: "GET /api/extract/history",
+      credits: "GET /api/credits",
+      keys: "GET /api/keys",
+    },
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Health
@@ -13,22 +42,43 @@ apiRouter.get("/health", (c) => {
 
 // ---------------------------------------------------------------------------
 // Extract — start a new extraction job
+// Supports both authenticated users (credit-based) and anonymous (3/day by IP)
 // ---------------------------------------------------------------------------
 apiRouter.post("/extract", async (c) => {
   const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const clientId = getClientId(c, auth.userId);
+  const tier = getTier(auth.plan || null, auth.authenticated);
+
+  // Admin bypass
+  if (auth.authenticated && auth.userId && isAdminUser(c.env, auth.userId)) {
+    // Skip rate limit and credit checks
+  } else {
+    // Rate limit check
+    const rl = await checkRateLimit(c.env, clientId, `${tier}:extract`);
+    if (!rl.allowed) return rateLimitResponse(c, rl);
+    setRateLimitHeaders(c, rl);
+
+    // Credit check for authenticated users
+    if (auth.authenticated && auth.userId) {
+      const credits = await getUserCredits(c.env, auth.userId);
+      if (credits <= 0) {
+        return c.json({ error: "No credits remaining. Upgrade your plan or wait for monthly reset." }, 402);
+      }
+      await deductCredit(c.env, auth.userId);
+    }
   }
 
+  // Validate input
   const body = await c.req.json<{ url?: string }>();
   if (!body.url) {
     return c.json({ error: "Missing required field: url" }, 400);
   }
 
-  // Validate URL
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(body.url);
+    let inputUrl = body.url.trim();
+    if (!inputUrl.startsWith("http")) inputUrl = `https://${inputUrl}`;
+    parsedUrl = new URL(inputUrl);
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
       throw new Error("Invalid protocol");
     }
@@ -36,33 +86,25 @@ apiRouter.post("/extract", async (c) => {
     return c.json({ error: "Invalid URL" }, 400);
   }
 
-  // Check credits
-  const credits = await getUserCredits(c.env, auth.userId);
-  if (credits <= 0) {
-    return c.json({ error: "No credits remaining" }, 402);
-  }
-
-  // Deduct a credit
-  await deductCredit(c.env, auth.userId);
-
-  // Create extraction record in D1
   const jobId = crypto.randomUUID();
   const domain = parsedUrl.hostname.replace(/^www\./, "");
+  const userId = auth.userId || `anon:${clientId}`;
 
+  // Write extraction record
   await c.env.DB.prepare(
     `INSERT INTO extraction (id, "userId", domain, url, status, "schemaVersion", "createdAt")
      VALUES (?, ?, ?, ?, 'queued', 'v1', datetime('now'))`
   )
-    .bind(jobId, auth.userId, domain, parsedUrl.toString())
+    .bind(jobId, userId, domain, parsedUrl.toString())
     .run();
 
-  // Start the workflow
+  // Start workflow
   const instance = await c.env.EXTRACT_BRAND.create({
     id: jobId,
     params: {
       url: parsedUrl.toString(),
       jobId,
-      userId: auth.userId,
+      userId,
     },
   });
 
@@ -70,13 +112,17 @@ apiRouter.post("/extract", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Extract — history for current user (MUST be before :jobId route)
+// Extract — history (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/history", async (c) => {
   const auth = await resolveAuth(c);
   if (!auth.authenticated || !auth.userId) {
     return c.json({ error: "Unauthorized" }, 401);
   }
+
+  const rl = await checkRateLimit(c.env, getClientId(c, auth.userId), `${getTier(auth.plan || null, true)}:read`);
+  if (!rl.allowed) return rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
 
   const result = await c.env.DB.prepare(
     `SELECT id, domain, url, status, "durationMs", "createdAt", "completedAt"
@@ -92,13 +138,16 @@ apiRouter.get("/extract/history", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Extract — poll job status
+// Extract — poll job status (open — anyone with the jobId can poll)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId", async (c) => {
   const auth = await resolveAuth(c);
-  if (!auth.authenticated) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const clientId = getClientId(c, auth.userId);
+  const tier = getTier(auth.plan || null, auth.authenticated);
+
+  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
+  if (!rl.allowed) return rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
 
   const jobId = c.req.param("jobId");
 
@@ -112,13 +161,16 @@ apiRouter.get("/extract/:jobId", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Extract — get cached result
+// Extract — get cached result (open — anyone with the jobId can read)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/result", async (c) => {
   const auth = await resolveAuth(c);
-  if (!auth.authenticated) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const clientId = getClientId(c, auth.userId);
+  const tier = getTier(auth.plan || null, auth.authenticated);
+
+  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
+  if (!rl.allowed) return rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
 
   const jobId = c.req.param("jobId");
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
@@ -131,9 +183,17 @@ apiRouter.get("/extract/:jobId/result", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Extract — get result by domain (cached, no credit cost)
+// Brand — get result by domain (public, rate-limited)
 // ---------------------------------------------------------------------------
 apiRouter.get("/brand/:domain", async (c) => {
+  const auth = await resolveAuth(c);
+  const clientId = getClientId(c, auth.userId);
+  const tier = getTier(auth.plan || null, auth.authenticated);
+
+  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
+  if (!rl.allowed) return rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
+
   const domain = c.req.param("domain");
   const cached = await c.env.CACHE.get(`brand:${domain}`, "json");
 
@@ -145,76 +205,70 @@ apiRouter.get("/brand/:domain", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Export — download brand kit in various formats
+// Export — download brand kit in various formats (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/export/:format", async (c) => {
   const auth = await resolveAuth(c);
   if (!auth.authenticated) return c.json({ error: "Unauthorized" }, 401);
+
+  const rl = await checkRateLimit(c.env, getClientId(c, auth.userId), `${getTier(auth.plan || null, true)}:read`);
+  if (!rl.allowed) return rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
 
   const jobId = c.req.param("jobId");
   const format = c.req.param("format");
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
   if (!cached) return c.json({ error: "Result not found" }, 404);
 
-  // Dynamic import to keep the main bundle small
   const { exportCssVariables, exportTailwindConfig, exportMarkdownReport, exportDesignTokens } =
     await import("../lib/export-formats");
 
-  const kit = cached as any; // ExtractVibeBrandKit
+  const kit = cached as any;
   const domain = kit.meta?.domain || "brand";
 
   switch (format) {
-    case "json": {
+    case "json":
       return new Response(JSON.stringify(kit, null, 2), {
         headers: {
           "Content-Type": "application/json",
           "Content-Disposition": `attachment; filename="${domain}-brand-kit.json"`,
         },
       });
-    }
-    case "css": {
-      const css = exportCssVariables(kit);
-      return new Response(css, {
+    case "css":
+      return new Response(exportCssVariables(kit), {
         headers: {
           "Content-Type": "text/css",
           "Content-Disposition": `attachment; filename="${domain}-variables.css"`,
         },
       });
-    }
-    case "tailwind": {
-      const tw = exportTailwindConfig(kit);
-      return new Response(tw, {
+    case "tailwind":
+      return new Response(exportTailwindConfig(kit), {
         headers: {
           "Content-Type": "text/css",
           "Content-Disposition": `attachment; filename="${domain}-tailwind-theme.css"`,
         },
       });
-    }
-    case "markdown": {
-      const md = exportMarkdownReport(kit);
-      return new Response(md, {
+    case "markdown":
+      return new Response(exportMarkdownReport(kit), {
         headers: {
           "Content-Type": "text/markdown",
           "Content-Disposition": `attachment; filename="${domain}-brand-report.md"`,
         },
       });
-    }
-    case "tokens": {
-      const tokens = exportDesignTokens(kit);
-      return new Response(tokens, {
+    case "tokens":
+      return new Response(exportDesignTokens(kit), {
         headers: {
           "Content-Type": "application/json",
           "Content-Disposition": `attachment; filename="${domain}-design-tokens.json"`,
         },
       });
-    }
     default:
       return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
   }
 });
 
 // ---------------------------------------------------------------------------
-// Credits
+// Credits (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/credits", async (c) => {
   const auth = await resolveAuth(c);
@@ -223,11 +277,12 @@ apiRouter.get("/credits", async (c) => {
   }
 
   const credits = await getUserCredits(c.env, auth.userId);
-  return c.json({ credits });
+  const plan = auth.plan || "free";
+  return c.json({ credits, plan });
 });
 
 // ---------------------------------------------------------------------------
-// API Keys — CRUD
+// API Keys — CRUD (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.post("/keys", async (c) => {
   const auth = await resolveAuth(c);
@@ -269,7 +324,6 @@ apiRouter.delete("/keys/:id", async (c) => {
   }
 
   const keyId = c.req.param("id");
-
   const result = await c.env.DB.prepare(
     `DELETE FROM api_key WHERE id = ? AND "userId" = ?`
   ).bind(keyId, auth.userId).run();
@@ -291,7 +345,6 @@ async function getUserCredits(env: Env, userId: string): Promise<number> {
   ).bind(userId).first<{ balance: number }>();
 
   if (!row) {
-    // First-time user: create a credit row with 50 free credits
     await env.DB.prepare(
       `INSERT INTO credit ("userId", balance, plan, "monthlyAllowance", "resetAt")
        VALUES (?, 50, 'free', 50, datetime('now', '+1 month'))`
