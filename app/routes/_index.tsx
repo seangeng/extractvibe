@@ -101,7 +101,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 gap-12 md:grid-cols-12 md:gap-8">
             {/* Headline column */}
             <div className="md:col-span-7">
-              <h1 className="animate-fade-up font-serif text-5xl leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
+              <h1 className="animate-fade-up font-display text-5xl leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
                 <span className="font-bold">The brand kit</span>{" "}
                 <span className="font-normal text-[hsl(var(--muted-foreground))]">
                   your website already has.
@@ -150,7 +150,7 @@ export default function LandingPage() {
               <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 01 / Visual Identity
               </p>
-              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+              <h3 className="mt-4 font-display text-3xl leading-[1.1] md:text-4xl">
                 <span className="font-bold">Deep extraction</span>{" "}
                 <span className="font-normal text-[hsl(var(--muted-foreground))]">
                   beyond logos and colors.
@@ -168,7 +168,7 @@ export default function LandingPage() {
               <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 02 / Brand Voice
               </p>
-              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+              <h3 className="mt-4 font-display text-3xl leading-[1.1] md:text-4xl">
                 <span className="font-bold">AI-powered analysis</span>{" "}
                 <span className="font-normal text-[hsl(var(--muted-foreground))]">
                   of tone, style, and personality.
@@ -186,7 +186,7 @@ export default function LandingPage() {
               <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 03 / Vibe Synthesis
               </p>
-              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+              <h3 className="mt-4 font-display text-3xl leading-[1.1] md:text-4xl">
                 <span className="font-bold">Holistic brand profile</span>{" "}
                 <span className="font-normal text-[hsl(var(--muted-foreground))]">
                   with actionable rules.
@@ -249,7 +249,7 @@ export default function LandingPage() {
                 onMouseLeave={() => setHoveredBrand(null)}
               >
                 <div className="flex min-w-[280px] flex-col rounded-2xl border border-[hsl(var(--border))] px-8 py-10 transition-colors duration-200 hover:bg-[hsl(var(--muted))]">
-                  <span className="font-serif text-2xl">{brand.domain}</span>
+                  <span className="font-display text-2xl">{brand.domain}</span>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {brand.tags.map((tag) => (
                       <Badge key={tag} variant="outline" className="text-xs">
@@ -276,7 +276,7 @@ export default function LandingPage() {
       <section className="border-t border-[hsl(var(--border))]">
         <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-            <h2 className="font-serif text-4xl leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
+            <h2 className="font-display text-4xl leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
               <span className="font-bold">Ready to extract</span>{" "}
               <span className="font-normal text-[hsl(var(--muted-foreground))]">
                 your brand?

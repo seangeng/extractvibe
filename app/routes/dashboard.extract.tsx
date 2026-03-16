@@ -266,7 +266,7 @@ export default function ExtractPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="font-serif text-2xl font-bold">Extract Brand</h1>
+        <h1 className="font-display text-2xl font-bold">Extract Brand</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Enter a URL to extract a comprehensive brand kit
         </p>

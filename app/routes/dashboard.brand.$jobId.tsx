@@ -129,7 +129,7 @@ function SectionLabel({
       <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
         {number} / {label}
       </p>
-      <h2 className="mt-3 font-serif text-2xl font-bold">{title}</h2>
+      <h2 className="mt-3 font-display text-2xl font-bold">{title}</h2>
     </div>
   );
 }
@@ -340,7 +340,7 @@ function FontFamilyCard({
   return (
     <div className="space-y-3 rounded-xl border border-[hsl(var(--border))] p-4">
       <div className="flex items-start justify-between gap-2">
-        <h4 className="font-serif text-lg font-semibold" style={{ fontFamily: family.name }}>
+        <h4 className="font-display text-lg font-semibold" style={{ fontFamily: family.name }}>
           {family.name || "Unknown"}
         </h4>
         <div className="flex gap-1.5">
@@ -468,7 +468,7 @@ export default function BrandKitPage() {
           <AlertCircle className="h-7 w-7 text-[hsl(var(--destructive))]" />
         </div>
         <div className="text-center">
-          <h2 className="font-serif text-lg font-semibold">Could not load brand kit</h2>
+          <h2 className="font-display text-lg font-semibold">Could not load brand kit</h2>
           <p className="mt-1 max-w-md text-sm text-[hsl(var(--muted-foreground))]">
             {error || "An unexpected error occurred."}
           </p>
@@ -509,7 +509,7 @@ export default function BrandKitPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="font-serif text-2xl font-bold md:text-3xl">{brandName}</h1>
+            <h1 className="font-display text-2xl font-bold md:text-3xl">{brandName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[hsl(var(--muted-foreground))]">
               {domain && (
                 <span className="flex items-center gap-1">
@@ -716,7 +716,7 @@ export default function BrandKitPage() {
                 <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                   Brand Name
                 </p>
-                <p className="mt-0.5 font-serif text-lg font-bold">{cleanBrandName(identity.brandName)}</p>
+                <p className="mt-0.5 font-display text-lg font-bold">{cleanBrandName(identity.brandName)}</p>
               </div>
             )}
             {identity.tagline && (

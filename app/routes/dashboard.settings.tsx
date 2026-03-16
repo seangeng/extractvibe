@@ -89,7 +89,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="font-serif text-2xl font-bold">Settings</h1>
+        <h1 className="font-display text-2xl font-bold">Settings</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Manage your account settings and preferences
         </p>

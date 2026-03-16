@@ -78,7 +78,7 @@ function SectionLabel({
       <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
         {number} / {label}
       </p>
-      <h2 className="mt-3 font-serif text-2xl font-bold">{title}</h2>
+      <h2 className="mt-3 font-display text-2xl font-bold">{title}</h2>
     </div>
   );
 }
@@ -144,7 +144,7 @@ function FontFamilyCard({ family }: { family: FontFamily }) {
     <div className="space-y-2 rounded-xl border border-[hsl(var(--border))] p-4">
       <div className="flex items-start justify-between gap-2">
         <h4
-          className="font-serif text-lg font-semibold"
+          className="font-display text-lg font-semibold"
           style={{ fontFamily: family.name }}
         >
           {family.name || "Unknown"}
@@ -280,7 +280,7 @@ export default function PublicBrandPage({
               {domain}
             </a>
           </div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight md:text-5xl">
+          <h1 className="font-display text-3xl font-bold tracking-tight md:text-5xl">
             {brandName}
           </h1>
           {vibe?.summary && (
@@ -548,7 +548,7 @@ export default function PublicBrandPage({
 
         {/* ─── CTA ──────────────────────────────────────────────────────── */}
         <section className="animate-fade-up animation-delay-400 rounded-xl border border-[hsl(var(--border))] px-6 py-12 text-center">
-          <h2 className="font-serif text-2xl font-bold tracking-tight md:text-3xl">
+          <h2 className="font-display text-2xl font-bold tracking-tight md:text-3xl">
             Extract your own brand kit
           </h2>
           <p className="mx-auto mt-3 max-w-md text-[hsl(var(--muted-foreground))]">

@@ -159,7 +159,7 @@ export default function DashboardIndex() {
     <div className="space-y-8">
       {/* Welcome */}
       <div>
-        <h1 className="font-serif text-2xl font-bold md:text-3xl">Dashboard</h1>
+        <h1 className="font-display text-2xl font-bold md:text-3xl">Dashboard</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Welcome back. Extract brand kits from any website.
         </p>

@@ -102,7 +102,7 @@ export default function HistoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-bold">
+          <h1 className="font-display text-2xl font-bold">
             Extraction History
           </h1>
           <p className="mt-1 text-[hsl(var(--muted-foreground))]">

@@ -18,7 +18,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap",
   },
   { rel: "icon", type: "image/svg+xml", href: "/extract-vibe-logo.svg" },
 ];
@@ -71,7 +71,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[hsl(var(--background))]">
       <div className="mx-auto max-w-md px-6 text-center">
-        <p className="font-serif text-8xl font-bold text-[hsl(var(--foreground))]">{status}</p>
+        <p className="font-display text-8xl font-bold text-[hsl(var(--foreground))]">{status}</p>
         <h1 className="mt-6 text-xl font-medium text-[hsl(var(--foreground))]">
           {title}
         </h1>
