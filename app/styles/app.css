@@ -1,56 +1,57 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-brand-primary: #6366f1;
-  --color-brand-secondary: #8b5cf6;
-  --color-brand-accent: #06b6d4;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "Georgia", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-accent: #e85d04;
+  --color-accent-foreground: #ffffff;
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 0 0% 98%;
+    --foreground: 0 0% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 0 0% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 24 95% 46%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 239 84% 67%;
-    --radius: 0.5rem;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 24 95% 46%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 0 0% 4%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 0 0% 7%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 0 0% 7%;
     --popover-foreground: 0 0% 98%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 3.7% 15.9%;
+    --primary: 24 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 15%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 0 0% 15%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 239 84% 67%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 24 95% 53%;
   }
 }
 
@@ -62,5 +63,64 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+  }
+}
+
+/* ─── Animations ───────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    opacity: 0;
+  }
+
+  .animate-pulse-dot {
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-400 { animation-delay: 400ms; }
+
+  .nav-link {
+    position: relative;
+  }
+  .nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: currentColor;
+    transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .nav-link:hover::after {
+    width: 100%;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

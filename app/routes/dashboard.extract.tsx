@@ -3,9 +3,6 @@ import { useSearchParams, Link } from "react-router";
 import {
   Globe,
   Loader2,
-  CheckCircle2,
-  Circle,
-  Clock,
   Sparkles,
   ExternalLink,
   AlertCircle,
@@ -72,13 +69,13 @@ const initialSteps: ExtractionStep[] = [
 function StepIcon({ status }: { status: StepStatus }) {
   switch (status) {
     case "complete":
-      return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+      return <div className="h-3 w-3 rounded-full bg-[hsl(var(--foreground))]" />;
     case "running":
-      return <Loader2 className="h-5 w-5 animate-spin text-brand-primary" />;
+      return <div className="h-3 w-3 rounded-full bg-[hsl(var(--foreground))] animate-pulse-dot" />;
     case "error":
-      return <AlertCircle className="h-5 w-5 text-[hsl(var(--destructive))]" />;
+      return <div className="h-3 w-3 rounded-full bg-[hsl(var(--destructive))]" />;
     default:
-      return <Clock className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />;
+      return <div className="h-3 w-3 rounded-full border-2 border-[hsl(var(--border))]" />;
   }
 }
 
@@ -269,7 +266,7 @@ export default function ExtractPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Extract Brand</h1>
+        <h1 className="font-serif text-2xl font-bold">Extract Brand</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Enter a URL to extract a comprehensive brand kit
         </p>
@@ -339,7 +336,7 @@ export default function ExtractPage() {
               <div>
                 <CardTitle className="text-lg">
                   {domain && (
-                    <span className="text-brand-primary">{domain}</span>
+                    <span className="text-[hsl(var(--foreground))]">{domain}</span>
                   )}
                   {!domain && "Extraction Progress"}
                 </CardTitle>
@@ -351,12 +348,12 @@ export default function ExtractPage() {
               </div>
               <div className="flex items-center gap-3">
                 {!complete && (
-                  <span className="text-sm font-medium tabular-nums text-brand-primary">
+                  <span className="text-sm font-medium tabular-nums text-[hsl(var(--foreground))]">
                     {percent}%
                   </span>
                 )}
                 {complete && (
-                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                  <Badge variant="success">
                     Complete
                   </Badge>
                 )}
@@ -366,7 +363,7 @@ export default function ExtractPage() {
             {/* Progress bar */}
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]">
               <div
-                className="h-full rounded-full bg-brand-primary transition-all duration-500 ease-out"
+                className="h-full rounded-full bg-[hsl(var(--foreground))] transition-all duration-500 ease-out"
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -378,7 +375,7 @@ export default function ExtractPage() {
                   <div
                     className={cn(
                       "flex items-start gap-4 rounded-lg p-3 transition-colors",
-                      step.status === "running" && "bg-brand-primary/5",
+                      step.status === "running" && "bg-[hsl(var(--muted))]",
                       step.status === "complete" && "opacity-70"
                     )}
                   >

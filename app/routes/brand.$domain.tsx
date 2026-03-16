@@ -1,13 +1,7 @@
 import { Link } from "react-router";
-import { Sparkles, ArrowRight, Globe, CheckCircle2, XCircle } from "lucide-react";
+import { Globe, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { cn } from "~/lib/utils";
 import type { Route } from "./+types/brand.$domain";
 import type {
@@ -68,6 +62,27 @@ function getAllColors(mode?: ColorMode): { key: string; color: ColorValue }[] {
     .map(([key, v]) => ({ key, color: v as ColorValue }));
 }
 
+// ─── Numbered Section Label ─────────────────────────────────────────────
+
+function SectionLabel({
+  number,
+  label,
+  title,
+}: {
+  number: string;
+  label: string;
+  title: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+        {number} / {label}
+      </p>
+      <h2 className="mt-3 font-serif text-2xl font-bold">{title}</h2>
+    </div>
+  );
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────
 
 function ColorSwatch({ color }: { color: ColorValue; label?: string }) {
@@ -75,7 +90,7 @@ function ColorSwatch({ color }: { color: ColorValue; label?: string }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="h-14 w-14 rounded-lg border border-[hsl(var(--border))] shadow-sm sm:h-16 sm:w-16"
+        className="h-16 w-16 rounded-xl border border-[hsl(var(--border))]"
         style={{ backgroundColor: hex }}
       />
       <div className="text-center">
@@ -95,13 +110,12 @@ function ToneBar({
   leftLabel,
   rightLabel,
   value,
-  accentColor,
 }: {
   label: string;
   leftLabel: string;
   rightLabel: string;
   value?: number;
-  accentColor: string;
+  accentColor?: string;
 }) {
   if (value === undefined || value === null) return null;
   const percentage = ((value - 1) / 9) * 100;
@@ -115,20 +129,10 @@ function ToneBar({
         </span>
         <span>{rightLabel}</span>
       </div>
-      <div className="relative h-2 w-full rounded-full bg-[hsl(var(--muted))]">
+      <div className="relative h-1.5 w-full rounded-full bg-[hsl(var(--muted))]">
         <div
-          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-md"
-          style={{
-            left: `${percentage}%`,
-            backgroundColor: accentColor,
-          }}
-        />
-        <div
-          className="h-full rounded-full opacity-20"
-          style={{
-            width: `${percentage}%`,
-            backgroundColor: accentColor,
-          }}
+          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[hsl(var(--foreground))]"
+          style={{ left: `${percentage}%` }}
         />
       </div>
     </div>
@@ -137,10 +141,10 @@ function ToneBar({
 
 function FontFamilyCard({ family }: { family: FontFamily }) {
   return (
-    <div className="space-y-2 rounded-lg border border-[hsl(var(--border))] p-4">
+    <div className="space-y-2 rounded-xl border border-[hsl(var(--border))] p-4">
       <div className="flex items-start justify-between gap-2">
         <h4
-          className="text-lg font-semibold"
+          className="font-serif text-lg font-semibold"
           style={{ fontFamily: family.name }}
         >
           {family.name || "Unknown"}
@@ -156,14 +160,16 @@ function FontFamilyCard({ family }: { family: FontFamily }) {
       {family.weights && family.weights.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {family.weights.map((w) => (
-            <span
-              key={w}
-              className="rounded bg-[hsl(var(--muted))] px-2 py-0.5 text-xs tabular-nums"
-            >
+            <Badge key={w} variant="outline" className="text-xs tabular-nums">
               {w}
-            </span>
+            </Badge>
           ))}
         </div>
+      )}
+      {family.source && (
+        <Badge variant="outline" className="text-[10px]">
+          {family.source}
+        </Badge>
       )}
       {family.fallbackStack && (
         <p className="break-all font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
@@ -202,7 +208,7 @@ function TypeScalePreview({ scale }: { scale: TypeScale }) {
         {entries.map(([level, entry]) => (
           <div
             key={level}
-            className="flex items-center gap-4 rounded-lg border border-[hsl(var(--border))] px-4 py-3"
+            className="flex items-center gap-4 rounded-xl border border-[hsl(var(--border))] px-4 py-3"
           >
             <Badge variant="outline" className="w-16 justify-center font-mono text-xs">
               {level}
@@ -239,11 +245,6 @@ export default function PublicBrandPage({
 
   const brandName = cleanBrandName(identity?.brandName);
 
-  const accentColor =
-    colors?.lightMode?.primary?.hex ||
-    colors?.lightMode?.accent?.hex ||
-    "#6366f1";
-
   const lightColors = getAllColors(colors?.lightMode);
   const darkColors = getAllColors(colors?.darkMode);
   const allDisplayColors = lightColors.length > 0 ? lightColors : darkColors;
@@ -256,9 +257,7 @@ export default function PublicBrandPage({
       <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
+            <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-8 w-8" />
             <span className="text-lg font-bold">ExtractVibe</span>
           </Link>
           <Button asChild size="sm">
@@ -267,9 +266,9 @@ export default function PublicBrandPage({
         </div>
       </nav>
 
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-10 md:py-16">
-        {/* ─── 1. Brand Header ──────────────────────────────────────────── */}
-        <section className="space-y-4">
+      <main className="mx-auto max-w-5xl space-y-12 px-6 py-10 md:py-16">
+        {/* ─── 01. Brand Header ──────────────────────────────────────────── */}
+        <section className="animate-fade-up space-y-4">
           <div className="flex items-center gap-3 text-sm text-[hsl(var(--muted-foreground))]">
             <Globe className="h-4 w-4" />
             <a
@@ -281,7 +280,7 @@ export default function PublicBrandPage({
               {domain}
             </a>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight md:text-5xl">
+          <h1 className="font-serif text-3xl font-bold tracking-tight md:text-5xl">
             {brandName}
           </h1>
           {vibe?.summary && (
@@ -292,292 +291,265 @@ export default function PublicBrandPage({
           {vibe?.tags && vibe.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {vibe.tags.map((tag: string) => (
-                <Badge key={tag} variant="secondary">
+                <Badge key={tag} variant="outline">
                   {tag}
                 </Badge>
               ))}
             </div>
           )}
+          {/* Visual energy bar */}
+          {vibe?.visualEnergy !== undefined && vibe.visualEnergy !== null && (
+            <div className="max-w-md space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                <span>Visual Energy</span>
+                <span className="font-semibold tabular-nums text-[hsl(var(--foreground))]">
+                  {vibe.visualEnergy}/10
+                </span>
+              </div>
+              <div className="relative h-1.5 w-full rounded-full bg-[hsl(var(--muted))]">
+                <div
+                  className="h-full rounded-full bg-[hsl(var(--foreground))] transition-all duration-500"
+                  style={{ width: `${(vibe.visualEnergy / 10) * 100}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+                <span>Calm & Understated</span>
+                <span>High-Energy & Bold</span>
+              </div>
+            </div>
+          )}
+          {/* Comparable brands */}
+          {vibe?.comparableBrands && vibe.comparableBrands.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                Comparable Brands
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {vibe.comparableBrands.map((brand: string) => (
+                  <span key={brand} className="text-sm text-[hsl(var(--muted-foreground))]">
+                    {brand}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
-        {/* ─── 2. Color Palette ─────────────────────────────────────────── */}
+        {/* ─── 02. Color Palette ─────────────────────────────────────────── */}
         {allDisplayColors.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Color Palette</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {lightColors.length > 0 && (
-                  <div className="space-y-3">
-                    {darkColors.length > 0 && (
-                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                        Light Mode
-                      </h4>
-                    )}
-                    <div className="flex flex-wrap gap-4">
-                      {lightColors.map(({ key, color }) => (
-                        <ColorSwatch
-                          key={key}
-                          color={{ ...color, role: color.role || key }}
-                        />
-                      ))}
-                    </div>
+          <section className="animate-fade-up animation-delay-100 space-y-5">
+            <SectionLabel number="01" label="Color Palette" title="Colors" />
+
+            <div className="space-y-6">
+              {lightColors.length > 0 && (
+                <div className="space-y-3">
+                  {darkColors.length > 0 && (
+                    <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                      Light Mode
+                    </h4>
+                  )}
+                  <div className="flex flex-wrap gap-4">
+                    {lightColors.map(({ key, color }) => (
+                      <ColorSwatch
+                        key={key}
+                        color={{ ...color, role: color.role || key }}
+                      />
+                    ))}
                   </div>
-                )}
-                {darkColors.length > 0 && (
-                  <div className="space-y-3">
-                    {lightColors.length > 0 && (
-                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                        Dark Mode
-                      </h4>
-                    )}
-                    <div className="flex flex-wrap gap-4">
-                      {darkColors.map(({ key, color }) => (
-                        <ColorSwatch
-                          key={key}
-                          color={{ ...color, role: color.role || key }}
-                        />
-                      ))}
-                    </div>
+                </div>
+              )}
+              {darkColors.length > 0 && (
+                <div className="space-y-3">
+                  {lightColors.length > 0 && (
+                    <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                      Dark Mode
+                    </h4>
+                  )}
+                  <div className="flex flex-wrap gap-4">
+                    {darkColors.map(({ key, color }) => (
+                      <ColorSwatch
+                        key={key}
+                        color={{ ...color, role: color.role || key }}
+                      />
+                    ))}
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
-        {/* ─── 3. Typography ────────────────────────────────────────────── */}
+        {/* ─── 03. Typography ────────────────────────────────────────────── */}
         {typography &&
           ((typography.families && typography.families.length > 0) ||
             typography.scale) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Typography</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Font families */}
-                {typography.families && typography.families.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                      Font Families
-                    </h4>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {typography.families.map((family: FontFamily, idx: number) => (
-                        <FontFamilyCard key={family.name || idx} family={family} />
-                      ))}
-                    </div>
+            <section className="animate-fade-up animation-delay-200 space-y-5">
+              <SectionLabel number="02" label="Typography" title="Fonts" />
+
+              {/* Font families */}
+              {typography.families && typography.families.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                    Font Families
+                  </h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {typography.families.map((family: FontFamily, idx: number) => (
+                      <FontFamilyCard key={family.name || idx} family={family} />
+                    ))}
                   </div>
-                )}
-                {/* Type scale preview */}
-                {typography.scale && <TypeScalePreview scale={typography.scale} />}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+              {/* Type scale preview */}
+              {typography.scale && <TypeScalePreview scale={typography.scale} />}
+            </section>
           )}
 
-        {/* ─── 4. Voice Tone Spectrum ───────────────────────────────────── */}
+        {/* ─── 04. Voice Tone Spectrum ───────────────────────────────────── */}
         {toneSpectrum &&
           (toneSpectrum.formalCasual !== undefined ||
             toneSpectrum.playfulSerious !== undefined ||
             toneSpectrum.enthusiasticMatterOfFact !== undefined ||
             toneSpectrum.respectfulIrreverent !== undefined ||
             toneSpectrum.technicalAccessible !== undefined) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Voice & Tone</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
+            <section className="animate-fade-up animation-delay-300 space-y-5">
+              <SectionLabel number="03" label="Voice & Tone" title="Personality" />
+
+              <div className="space-y-5">
                 <ToneBar
                   label="Formality"
                   leftLabel="Formal"
                   rightLabel="Casual"
                   value={toneSpectrum.formalCasual}
-                  accentColor={accentColor}
                 />
                 <ToneBar
                   label="Mood"
                   leftLabel="Playful"
                   rightLabel="Serious"
                   value={toneSpectrum.playfulSerious}
-                  accentColor={accentColor}
                 />
                 <ToneBar
                   label="Energy"
                   leftLabel="Enthusiastic"
                   rightLabel="Matter-of-Fact"
                   value={toneSpectrum.enthusiasticMatterOfFact}
-                  accentColor={accentColor}
                 />
                 <ToneBar
                   label="Attitude"
                   leftLabel="Respectful"
                   rightLabel="Irreverent"
                   value={toneSpectrum.respectfulIrreverent}
-                  accentColor={accentColor}
                 />
                 <ToneBar
                   label="Complexity"
                   leftLabel="Technical"
                   rightLabel="Accessible"
                   value={toneSpectrum.technicalAccessible}
-                  accentColor={accentColor}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-        {/* ─── 5. Brand Rules ───────────────────────────────────────────── */}
+        {/* ─── 05. Brand Rules ───────────────────────────────────────────── */}
         {rules &&
           ((rules.dos && rules.dos.length > 0) ||
             (rules.donts && rules.donts.length > 0)) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Brand Rules</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {/* DOs */}
-                  {rules.dos && rules.dos.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Do
-                      </h4>
-                      <ul className="space-y-2">
-                        {rules.dos.map((rule: string, i: number) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
-                          >
-                            <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                            {rule}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {/* DON'Ts */}
-                  {rules.donts && rules.donts.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="flex items-center gap-2 text-sm font-semibold text-red-600">
-                        <XCircle className="h-4 w-4" />
-                        Don&apos;t
-                      </h4>
-                      <ul className="space-y-2">
-                        {rules.donts.map((rule: string, i: number) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
-                          >
-                            <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-                            {rule}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <section className="animate-fade-up animation-delay-400 space-y-5">
+              <SectionLabel number="04" label="Brand Rules" title="Dos & Don&apos;ts" />
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* DOs */}
+                {rules.dos && rules.dos.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Do
+                    </h4>
+                    <ul className="space-y-2">
+                      {rules.dos.map((rule: string, i: number) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
+                        >
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                          {rule}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* DON'Ts */}
+                {rules.donts && rules.donts.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-[hsl(var(--destructive))]">
+                      <XCircle className="h-4 w-4" />
+                      Don&apos;t
+                    </h4>
+                    <ul className="space-y-2">
+                      {rules.donts.map((rule: string, i: number) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
+                        >
+                          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--destructive))]" />
+                          {rule}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
 
-        {/* ─── 6. Vibe Tags & Comparable Brands ─────────────────────────── */}
+        {/* ─── 06. Vibe Details ──────────────────────────────────────────── */}
         {vibe &&
           ((vibe.visualEnergy !== undefined && vibe.visualEnergy !== null) ||
             vibe.designEra ||
             vibe.emotionalTone ||
-            vibe.targetAudienceInferred ||
-            (vibe.comparableBrands && vibe.comparableBrands.length > 0)) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Brand Vibe</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Visual energy meter */}
-                {vibe.visualEnergy !== undefined &&
-                  vibe.visualEnergy !== null && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[hsl(var(--muted-foreground))]">
-                          Visual Energy
-                        </span>
-                        <span className="font-semibold tabular-nums">
-                          {vibe.visualEnergy}/10
-                        </span>
-                      </div>
-                      <div className="h-3 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${(vibe.visualEnergy / 10) * 100}%`,
-                            background: `linear-gradient(to right, ${accentColor}80, ${accentColor})`,
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
-                        <span>Calm & Understated</span>
-                        <span>High-Energy & Bold</span>
-                      </div>
-                    </div>
-                  )}
+            vibe.targetAudienceInferred) && (
+            <section className="animate-fade-up animation-delay-400 space-y-5">
+              <SectionLabel number="05" label="Brand Vibe" title="Details" />
 
-                {/* Info row */}
-                <div className="flex flex-wrap gap-x-6 gap-y-3">
-                  {vibe.designEra && (
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        Design Era
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium capitalize">
-                        {vibe.designEra}
-                      </p>
-                    </div>
-                  )}
-                  {vibe.emotionalTone && (
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        Emotional Tone
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium capitalize">
-                        {vibe.emotionalTone}
-                      </p>
-                    </div>
-                  )}
-                  {vibe.targetAudienceInferred && (
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        Target Audience
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium">
-                        {vibe.targetAudienceInferred}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Comparable brands */}
-                {vibe.comparableBrands && vibe.comparableBrands.length > 0 && (
+              {/* Info row */}
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
+                {vibe.designEra && (
                   <div>
-                    <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      Comparable Brands
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      Design Era
                     </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {vibe.comparableBrands.map((brand: string) => (
-                        <Badge key={brand} variant="outline" className="text-xs">
-                          {brand}
-                        </Badge>
-                      ))}
-                    </div>
+                    <p className="mt-0.5 text-sm font-medium capitalize">
+                      {vibe.designEra}
+                    </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+                {vibe.emotionalTone && (
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      Emotional Tone
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium capitalize">
+                      {vibe.emotionalTone}
+                    </p>
+                  </div>
+                )}
+                {vibe.targetAudienceInferred && (
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      Target Audience
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium">
+                      {vibe.targetAudienceInferred}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
 
         {/* ─── CTA ──────────────────────────────────────────────────────── */}
-        <section className="rounded-xl border border-[hsl(var(--border))] bg-gradient-to-b from-brand-primary/5 to-transparent px-6 py-12 text-center">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Extract your own brand kit — free
+        <section className="animate-fade-up animation-delay-400 rounded-xl border border-[hsl(var(--border))] px-6 py-12 text-center">
+          <h2 className="font-serif text-2xl font-bold tracking-tight md:text-3xl">
+            Extract your own brand kit
           </h2>
           <p className="mx-auto mt-3 max-w-md text-[hsl(var(--muted-foreground))]">
             Get colors, fonts, voice, and personality from any website in
@@ -587,7 +559,6 @@ export default function PublicBrandPage({
             <Button asChild size="lg" className="h-12 px-8">
               <Link to="/sign-up">
                 Get started free
-                <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
           </div>
@@ -599,9 +570,7 @@ export default function PublicBrandPage({
         <div className="mx-auto max-w-5xl px-6 py-10">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <Link to="/" className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
+              <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-7 w-7" />
               <span className="font-semibold">ExtractVibe</span>
             </Link>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">

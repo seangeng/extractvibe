@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useLoaderData, redirect } from "react-router";
 import {
-  Sparkles,
   Wand2,
   History,
   Key,
   Settings,
   LogOut,
   Menu,
-  X,
-  ChevronRight,
   LayoutDashboard,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -60,15 +57,14 @@ export default function DashboardLayout() {
         to={item.href}
         onClick={onClick}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
           isActive
-            ? "bg-brand-primary/10 text-brand-primary"
+            ? "border-l-2 border-[hsl(var(--foreground))] bg-[hsl(var(--muted))] font-medium text-[hsl(var(--foreground))]"
             : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
         )}
       >
         <item.icon className="h-4 w-4" />
         {item.name}
-        {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
       </Link>
     );
   }
@@ -77,10 +73,8 @@ export default function DashboardLayout() {
     <>
       <div className="flex h-14 items-center border-b border-[hsl(var(--border))] px-4">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-            <Sparkles className="h-3.5 w-3.5 text-white" />
-          </div>
-          <span className="font-bold">ExtractVibe</span>
+          <img src="/extract-vibe-logo.svg" className="h-6 w-6" alt="ExtractVibe" />
+          <span className="text-base font-semibold">ExtractVibe</span>
         </Link>
       </div>
       <nav className="flex-1 space-y-1 p-4">
@@ -94,7 +88,7 @@ export default function DashboardLayout() {
       </nav>
       <div className="border-t border-[hsl(var(--border))] p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-primary/10 text-sm font-medium text-brand-primary">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-sm font-medium text-[hsl(var(--foreground))]">
             {user.name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
           </div>
           <div className="flex-1 truncate">
@@ -122,7 +116,7 @@ export default function DashboardLayout() {
             className="fixed inset-0 bg-black/50"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-[hsl(var(--card))] shadow-xl">
+          <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-[hsl(var(--card))]">
             {sidebarContent}
           </aside>
         </div>
@@ -132,14 +126,17 @@ export default function DashboardLayout() {
       <div className="flex flex-1 flex-col">
         {/* Top header */}
         <header className="flex h-14 items-center justify-between border-b border-[hsl(var(--border))] px-4 lg:px-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <span className="text-sm font-semibold lg:hidden">ExtractVibe</span>
+          </div>
 
           <div className="hidden lg:block" />
 

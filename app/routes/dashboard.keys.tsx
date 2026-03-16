@@ -119,7 +119,7 @@ export default function KeysPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">API Keys</h1>
+          <h1 className="font-serif text-2xl font-bold">API Keys</h1>
           <p className="mt-1 text-[hsl(var(--muted-foreground))]">
             Manage API keys for programmatic access
           </p>
@@ -145,10 +145,10 @@ export default function KeysPage() {
 
       {/* New Key Display */}
       {newKeyValue && (
-        <Card className="border-amber-500/30 bg-amber-500/5">
+        <Card className="border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="h-5 w-5 text-amber-500" />
+              <Shield className="h-5 w-5 text-[hsl(var(--primary))]" />
               Your new API key
             </CardTitle>
             <CardDescription>
@@ -309,7 +309,7 @@ export default function KeysPage() {
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start gap-3">
-            <Shield className="mt-0.5 h-5 w-5 text-brand-primary" />
+            <Shield className="mt-0.5 h-5 w-5 text-[hsl(var(--muted-foreground))]" />
             <div>
               <p className="text-sm font-medium">API Usage</p>
               <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">

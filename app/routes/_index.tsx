@@ -1,27 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import {
-  Sparkles,
-  Palette,
-  MessageSquareText,
-  BookOpen,
-  Waves,
-  FileDown,
-  ArrowRight,
-  Globe,
-  CheckCircle2,
-  XCircle,
-  Github,
-} from "lucide-react";
+import { ArrowUpRight, Github } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { useSession } from "~/lib/auth-client";
 
@@ -44,57 +25,6 @@ export function meta() {
     },
   ];
 }
-
-const features = [
-  {
-    icon: Palette,
-    title: "Deep Visual Identity",
-    description:
-      "Extracts logos, color palettes, gradients, spacing, and visual hierarchy from any website automatically.",
-  },
-  {
-    icon: MessageSquareText,
-    title: "Brand Voice Analysis",
-    description:
-      "AI-powered copy analysis to determine brand tone, personality traits, and communication style.",
-  },
-  {
-    icon: BookOpen,
-    title: "Brand Rules",
-    description:
-      "Auto-generates inferred brand guidelines with clear do's and don'ts for consistent brand usage.",
-  },
-  {
-    icon: Waves,
-    title: "Vibe Synthesis",
-    description:
-      "Creates a holistic brand personality profile by combining visual and verbal identity signals.",
-  },
-  {
-    icon: Sparkles,
-    title: "Brand Kit Discovery",
-    description:
-      "Detects typography, font stacks, icon systems, image treatments, and component patterns.",
-  },
-  {
-    icon: FileDown,
-    title: "Multi-Format Export",
-    description:
-      "Export brand kits as JSON, PDF, or structured data for design tools and AI workflows.",
-  },
-];
-
-const comparisonRows = [
-  { feature: "Logo extraction", us: true, them: true },
-  { feature: "Color palette detection", us: true, them: true },
-  { feature: "Typography analysis", us: true, them: false },
-  { feature: "Brand voice & tone", us: true, them: false },
-  { feature: "Personality profiling", us: true, them: false },
-  { feature: "Brand rule generation", us: true, them: false },
-  { feature: "Multi-format export", us: true, them: false },
-  { feature: "API access", us: true, them: false },
-  { feature: "Open source", us: true, them: false },
-];
 
 const recentlyExtracted = [
   {
@@ -120,6 +50,7 @@ function normalizeUrl(input: string): string {
 
 export default function LandingPage() {
   const [url, setUrl] = useState("");
+  const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
   const navigate = useNavigate();
   const { data: session } = useSession();
 
@@ -141,242 +72,221 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-lg font-bold">ExtractVibe</span>
+      <nav className="fixed top-0 z-50 w-full border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <Link to="/" className="flex items-center gap-2.5">
+            <img src="/extract-vibe-logo.svg" className="h-7 w-7" alt="ExtractVibe logo" />
+            <span className="text-lg font-bold tracking-tight">ExtractVibe</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <Link
               to="/sign-in"
-              className="text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+              className="nav-link text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
             >
               Sign in
             </Link>
             <Button asChild size="sm">
-              <Link to="/sign-up">Get started</Link>
+              <Link to="/sign-up">
+                Get started
+                <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
             </Button>
           </div>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
-            <div className="h-[600px] w-[600px] rounded-full bg-brand-primary/10 blur-[120px]" />
-          </div>
-          <div className="absolute right-0 top-1/4">
-            <div className="h-[400px] w-[400px] rounded-full bg-brand-accent/10 blur-[100px]" />
-          </div>
-        </div>
-        <div className="mx-auto max-w-4xl px-6 pb-24 pt-20 text-center md:pt-32 md:pb-32">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 px-4 py-1.5 text-sm text-brand-primary">
-            <Sparkles className="h-3.5 w-3.5" />
-            Open source brand intelligence
-          </div>
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight md:text-6xl lg:text-7xl">
-            The brand kit your{" "}
-            <span className="bg-gradient-to-r from-brand-primary via-brand-secondary to-brand-accent bg-clip-text text-transparent">
-              website already has
-            </span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-[hsl(var(--muted-foreground))] md:text-xl">
-            Extract comprehensive brand identity from any website — logos,
-            colors, typography, voice, personality, and rules. Open source.
-          </p>
-          <form
-            onSubmit={handleExtract}
-            className="mx-auto mt-10 flex max-w-lg flex-col gap-3 sm:flex-row"
-          >
-            <div className="relative flex-1">
-              <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-              <Input
-                type="text"
-                placeholder="stripe.com"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="h-12 pl-10 text-base"
-                required
-              />
+      {/* Hero — Asymmetric Grid */}
+      <section className="pt-32 md:pt-44">
+        <div className="mx-auto max-w-7xl px-6 pb-24 md:pb-32">
+          <div className="grid grid-cols-1 gap-12 md:grid-cols-12 md:gap-8">
+            {/* Headline column */}
+            <div className="md:col-span-7">
+              <h1 className="animate-fade-up font-serif text-5xl leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
+                <span className="font-bold">The brand kit</span>{" "}
+                <span className="font-normal text-[hsl(var(--muted-foreground))]">
+                  your website already has.
+                </span>
+              </h1>
+              <p className="animate-fade-up animation-delay-100 mt-6 max-w-lg text-lg leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Extract comprehensive brand identity from any website — logos,
+                colors, typography, voice, personality, and rules. Open source.
+              </p>
             </div>
-            <Button type="submit" size="lg" className="h-12 px-8">
-              Extract
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Button>
-          </form>
-          <p className="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
-            Free to try. No credit card required.
-          </p>
-        </div>
-      </section>
 
-      {/* Features */}
-      <section className="border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
-        <div className="mx-auto max-w-6xl px-6 py-24">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Everything you need to understand a brand
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-[hsl(var(--muted-foreground))]">
-              Go beyond surface-level scraping. ExtractVibe uses browser
-              rendering and AI analysis to build a complete brand profile.
-            </p>
-          </div>
-          <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card
-                key={feature.title}
-                className="group border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all hover:border-brand-primary/30 hover:shadow-lg hover:shadow-brand-primary/5"
-              >
-                <CardHeader>
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary transition-colors group-hover:bg-brand-primary group-hover:text-white">
-                    <feature.icon className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-lg">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-sm leading-relaxed">
-                    {feature.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
+            {/* Form column */}
+            <div className="animate-fade-up animation-delay-200 md:col-span-5 md:self-end">
+              <form onSubmit={handleExtract} className="relative">
+                <Input
+                  type="text"
+                  placeholder="Enter any website URL..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="h-14 rounded-2xl pr-14 text-base"
+                  required
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-xl"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                </Button>
+              </form>
+              <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+                Free to try. No credit card required.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Comparison */}
+      {/* Features — Staggered Editorial Blocks */}
       <section className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-4xl px-6 py-24">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              More than just logos and colors
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-[hsl(var(--muted-foreground))]">
-              Most tools stop at the surface. ExtractVibe digs deep into every
-              dimension of brand identity.
-            </p>
-          </div>
-          <div className="mt-12 overflow-hidden rounded-lg border border-[hsl(var(--border))]">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/50">
-                  <th className="px-6 py-4 text-left text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                    Feature
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-brand-primary">
-                    ExtractVibe
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                    Others
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonRows.map((row, i) => (
-                  <tr
-                    key={row.feature}
-                    className={
-                      i < comparisonRows.length - 1
-                        ? "border-b border-[hsl(var(--border))]"
-                        : ""
-                    }
-                  >
-                    <td className="px-6 py-3.5 text-sm">{row.feature}</td>
-                    <td className="px-6 py-3.5 text-center">
-                      {row.us ? (
-                        <CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500" />
-                      ) : (
-                        <XCircle className="mx-auto h-5 w-5 text-[hsl(var(--muted-foreground))]" />
-                      )}
-                    </td>
-                    <td className="px-6 py-3.5 text-center">
-                      {row.them ? (
-                        <CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500" />
-                      ) : (
-                        <XCircle className="mx-auto h-5 w-5 text-[hsl(var(--muted-foreground))]/40" />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2 md:gap-12">
+            {/* Feature 01 */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                01 / Visual Identity
+              </p>
+              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+                <span className="font-bold">Deep extraction</span>{" "}
+                <span className="font-normal text-[hsl(var(--muted-foreground))]">
+                  beyond logos and colors.
+                </span>
+              </h3>
+              <p className="mt-4 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Captures logos, color palettes, gradients, spacing, typography
+                stacks, icon systems, and visual hierarchy from any website
+                automatically.
+              </p>
+            </div>
+
+            {/* Feature 02 — stagger offset */}
+            <div className="md:mt-16">
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                02 / Brand Voice
+              </p>
+              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+                <span className="font-bold">AI-powered analysis</span>{" "}
+                <span className="font-normal text-[hsl(var(--muted-foreground))]">
+                  of tone, style, and personality.
+                </span>
+              </h3>
+              <p className="mt-4 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Uses advanced language models to determine brand tone,
+                personality traits, communication patterns, and writing style
+                from real copy.
+              </p>
+            </div>
+
+            {/* Feature 03 */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                03 / Vibe Synthesis
+              </p>
+              <h3 className="mt-4 font-serif text-3xl leading-[1.1] md:text-4xl">
+                <span className="font-bold">Holistic brand profile</span>{" "}
+                <span className="font-normal text-[hsl(var(--muted-foreground))]">
+                  with actionable rules.
+                </span>
+              </h3>
+              <p className="mt-4 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Combines visual and verbal identity signals into a single,
+                coherent brand profile with inferred guidelines, do's and
+                don'ts, and export-ready data.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Recently Extracted */}
-      <section className="border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
-        <div className="mx-auto max-w-6xl px-6 py-24">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Recently Extracted
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-[hsl(var(--muted-foreground))]">
-              See what brand kits look like. Explore real extractions from
-              popular websites.
-            </p>
+      {/* Stats Bar */}
+      <section className="border-t border-[hsl(var(--border))]">
+        <div className="mx-auto max-w-7xl px-6 py-10">
+          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                50+ fields extracted
+              </span>
+            </div>
+            <div className="hidden h-4 w-px bg-[hsl(var(--border))] sm:block" />
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                5 export formats
+              </span>
+            </div>
+            <div className="hidden h-4 w-px bg-[hsl(var(--border))] sm:block" />
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                ~20s per domain
+              </span>
+            </div>
+            <div className="hidden h-4 w-px bg-[hsl(var(--border))] sm:block" />
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                Open source
+              </span>
+            </div>
           </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+        </div>
+      </section>
+
+      {/* Recently Extracted — Horizontal Scroll Strip */}
+      <section className="border-t border-[hsl(var(--border))]">
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <p className="mb-10 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+            Recently Extracted
+          </p>
+          <div className="scrollbar-none -mx-2 flex gap-4 overflow-x-auto pb-4">
             {recentlyExtracted.map((brand) => (
-              <Link key={brand.domain} to={`/brand/${brand.domain}`}>
-                <Card className="group h-full border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all hover:border-brand-primary/30 hover:shadow-lg hover:shadow-brand-primary/5">
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-                      <CardTitle className="text-base">{brand.domain}</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-1.5">
-                      {brand.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="mt-4 flex items-center gap-1 text-sm font-medium text-brand-primary opacity-0 transition-opacity group-hover:opacity-100">
-                      View brand kit
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </p>
-                  </CardContent>
-                </Card>
+              <Link
+                key={brand.domain}
+                to={`/brand/${brand.domain}`}
+                className="group flex-shrink-0"
+                onMouseEnter={() => setHoveredBrand(brand.domain)}
+                onMouseLeave={() => setHoveredBrand(null)}
+              >
+                <div className="flex min-w-[280px] flex-col rounded-2xl border border-[hsl(var(--border))] px-8 py-10 transition-colors duration-200 hover:bg-[hsl(var(--muted))]">
+                  <span className="font-serif text-2xl">{brand.domain}</span>
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {brand.tags.map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                  <p
+                    className={`mt-6 flex items-center gap-1.5 text-sm font-medium transition-opacity duration-200 ${
+                      hoveredBrand === brand.domain ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    View brand kit
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </p>
+                </div>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="border-t border-[hsl(var(--border))] bg-gradient-to-b from-brand-primary/5 to-transparent">
-        <div className="mx-auto max-w-4xl px-6 py-24 text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Ready to extract your brand?
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-[hsl(var(--muted-foreground))]">
-            Get started in seconds. Paste a URL, hit extract, and watch the
-            magic happen.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button asChild size="lg" className="h-12 px-8">
+      {/* CTA — Asymmetric */}
+      <section className="border-t border-[hsl(var(--border))]">
+        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+            <h2 className="font-serif text-4xl leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
+              <span className="font-bold">Ready to extract</span>{" "}
+              <span className="font-normal text-[hsl(var(--muted-foreground))]">
+                your brand?
+              </span>
+            </h2>
+            <Button asChild size="lg" className="h-12 shrink-0 px-8">
               <Link to="/sign-up">
                 Get started free
-                <ArrowRight className="ml-1 h-4 w-4" />
+                <ArrowUpRight className="ml-1 h-4 w-4" />
               </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="h-12 px-8">
-              <a
-                href="https://github.com/extractvibe/extractvibe"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Github className="mr-1 h-4 w-4" />
-                View on GitHub
-              </a>
             </Button>
           </div>
         </div>
@@ -384,38 +294,36 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-6xl px-6 py-12">
+        <div className="mx-auto max-w-7xl px-6 py-10">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
-              <span className="font-semibold">ExtractVibe</span>
-            </div>
-            <nav className="flex flex-wrap items-center justify-center gap-6 text-sm text-[hsl(var(--muted-foreground))]">
+            <Link to="/" className="flex items-center gap-2.5">
+              <img src="/extract-vibe-logo.svg" className="h-6 w-6" alt="ExtractVibe logo" />
+              <span className="text-sm font-semibold">ExtractVibe</span>
+            </Link>
+            <nav className="flex items-center gap-6 text-sm text-[hsl(var(--muted-foreground))]">
               <a
                 href="https://github.com/extractvibe/extractvibe"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="transition-colors hover:text-[hsl(var(--foreground))]"
+                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
               >
                 GitHub
               </a>
               <Link
-                to="/sign-in"
-                className="transition-colors hover:text-[hsl(var(--foreground))]"
+                to="/docs"
+                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
               >
-                Sign in
+                Docs
               </Link>
               <Link
-                to="/sign-up"
-                className="transition-colors hover:text-[hsl(var(--foreground))]"
+                to="/api"
+                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
               >
-                Sign up
+                API
               </Link>
             </nav>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              &copy; {new Date().getFullYear()} ExtractVibe. Open source.
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              &copy; {new Date().getFullYear()} ExtractVibe
             </p>
           </div>
         </div>

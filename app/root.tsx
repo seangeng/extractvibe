@@ -18,8 +18,9 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
   },
+  { rel: "icon", type: "image/svg+xml", href: "/extract-vibe-logo.svg" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -70,14 +71,14 @@ export function ErrorBoundary({ error }: { error: unknown }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[hsl(var(--background))]">
       <div className="mx-auto max-w-md px-6 text-center">
-        <p className="text-7xl font-bold text-brand-primary">{status}</p>
-        <h1 className="mt-4 text-2xl font-semibold text-[hsl(var(--foreground))]">
+        <p className="font-serif text-8xl font-bold text-[hsl(var(--foreground))]">{status}</p>
+        <h1 className="mt-6 text-xl font-medium text-[hsl(var(--foreground))]">
           {title}
         </h1>
         <p className="mt-2 text-[hsl(var(--muted-foreground))]">{message}</p>
         <a
           href="/"
-          className="mt-8 inline-flex items-center rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-primary/90"
+          className="mt-8 inline-flex items-center rounded-full bg-[hsl(var(--foreground))] px-5 py-2.5 text-sm font-medium text-[hsl(var(--background))] transition-all duration-200 hover:opacity-85"
         >
           Go back home
         </a>

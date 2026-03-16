@@ -89,7 +89,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="font-serif text-2xl font-bold">Settings</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Manage your account settings and preferences
         </p>
@@ -99,7 +99,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]">
               <User className="h-5 w-5" />
             </div>
             <div>
@@ -132,7 +132,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]">
               <Lock className="h-5 w-5" />
             </div>
             <div>

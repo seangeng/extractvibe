@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Sparkles, Loader2, Github } from "lucide-react";
+import { Loader2, Github } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
@@ -58,22 +58,15 @@ export default function SignInPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[hsl(var(--background))] px-4">
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute left-1/4 top-1/4 h-[400px] w-[400px] rounded-full bg-brand-primary/5 blur-[100px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-[300px] w-[300px] rounded-full bg-brand-accent/5 blur-[80px]" />
-      </div>
-
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">ExtractVibe</span>
+          <Link to="/" className="inline-flex items-center gap-2.5">
+            <img src="/extract-vibe-logo.svg" className="h-8 w-8" alt="ExtractVibe logo" />
+            <span className="text-xl font-bold tracking-tight">ExtractVibe</span>
           </Link>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-xl">Welcome back</CardTitle>
             <CardDescription>
@@ -195,7 +188,7 @@ export default function SignInPage() {
               Don&apos;t have an account?{" "}
               <Link
                 to="/sign-up"
-                className="font-medium text-brand-primary hover:underline"
+                className="nav-link font-medium text-[hsl(var(--foreground))]"
               >
                 Sign up
               </Link>

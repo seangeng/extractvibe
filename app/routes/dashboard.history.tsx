@@ -21,7 +21,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { api } from "~/lib/api";
-import { cn } from "~/lib/utils";
 
 export function meta() {
   return [{ title: "Extraction History — ExtractVibe" }];
@@ -41,14 +40,14 @@ function StatusBadge({ status }: { status: Extraction["status"] }) {
   switch (status) {
     case "complete":
       return (
-        <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+        <Badge variant="success">
           <CheckCircle2 className="mr-1 h-3 w-3" />
           Complete
         </Badge>
       );
     case "running":
       return (
-        <Badge className="border-brand-primary/20 bg-brand-primary/10 text-brand-primary">
+        <Badge variant="default">
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           Running
         </Badge>
@@ -103,7 +102,7 @@ export default function HistoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="font-serif text-2xl font-bold">
             Extraction History
           </h1>
           <p className="mt-1 text-[hsl(var(--muted-foreground))]">

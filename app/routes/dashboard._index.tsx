@@ -50,14 +50,14 @@ function StatusBadge({ status }: { status: Extraction["status"] }) {
   switch (status) {
     case "complete":
       return (
-        <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+        <Badge variant="success">
           <CheckCircle2 className="mr-1 h-3 w-3" />
           Complete
         </Badge>
       );
     case "running":
       return (
-        <Badge className="border-brand-primary/20 bg-brand-primary/10 text-brand-primary">
+        <Badge variant="default">
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           Running
         </Badge>
@@ -125,24 +125,24 @@ export default function DashboardIndex() {
       value: credits != null ? String(credits) : "—",
       description: "available credits",
       icon: Zap,
-      color: "text-amber-500",
-      bgColor: "bg-amber-500/10",
+      color: "text-[hsl(var(--muted-foreground))]",
+      bgColor: "bg-[hsl(var(--muted))]",
     },
     {
       label: "Extractions This Month",
       value: String(extractions.length),
       description: "brand kits extracted",
       icon: BarChart3,
-      color: "text-brand-primary",
-      bgColor: "bg-brand-primary/10",
+      color: "text-[hsl(var(--muted-foreground))]",
+      bgColor: "bg-[hsl(var(--muted))]",
     },
     {
       label: "API Keys Active",
       value: keyCount != null ? String(keyCount) : "—",
       description: "keys created",
       icon: Key,
-      color: "text-brand-accent",
-      bgColor: "bg-brand-accent/10",
+      color: "text-[hsl(var(--muted-foreground))]",
+      bgColor: "bg-[hsl(var(--muted))]",
     },
   ];
 
@@ -159,18 +159,18 @@ export default function DashboardIndex() {
     <div className="space-y-8">
       {/* Welcome */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="font-serif text-2xl font-bold md:text-3xl">Dashboard</h1>
         <p className="mt-1 text-[hsl(var(--muted-foreground))]">
           Welcome back. Extract brand kits from any website.
         </p>
       </div>
 
       {/* Quick Extract */}
-      <Card className="border-brand-primary/20 bg-gradient-to-r from-brand-primary/5 via-brand-secondary/5 to-brand-accent/5">
+      <Card className="border-t-2 border-t-[hsl(var(--primary))]">
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
-              <Sparkles className="h-5 w-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]">
+              <img src="/extract-vibe-logo.svg" className="h-5 w-5" alt="" />
             </div>
             <div className="flex-1">
               <h2 className="font-semibold">Quick Extract</h2>
