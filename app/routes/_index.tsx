@@ -238,96 +238,89 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero — Asymmetric Grid */}
-      <section className="pt-32 md:pt-44">
-        <div className="mx-auto max-w-7xl px-6 pb-24 md:pb-32">
-          <div className="grid grid-cols-1 gap-12 md:grid-cols-12 md:gap-8">
-            {/* Headline column */}
-            <div className="md:col-span-7">
-              <h1 className="animate-fade-up font-display text-5xl leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
-                <span className="font-bold">The brand kit</span>{" "}
-                <span className="font-normal text-[hsl(var(--muted-foreground))]">
-                  your website already has.
-                </span>
-              </h1>
-              <p className="animate-fade-up animation-delay-100 mt-6 max-w-lg text-lg leading-relaxed text-[hsl(var(--muted-foreground))]">
-                Extract comprehensive brand identity from any website — logos,
-                colors, typography, voice, personality, and rules. Open source.
-              </p>
-            </div>
+      {/* Hero — Centered, input-first */}
+      <section className="flex min-h-[85vh] flex-col items-center justify-center px-6 pt-20">
+        <div className="mx-auto w-full max-w-2xl text-center">
+          <h1 className="animate-fade-up font-display text-4xl leading-[1.1] tracking-tight sm:text-5xl md:text-6xl">
+            <span className="font-bold">The brand kit</span>
+            <br />
+            <span className="font-normal text-[hsl(var(--muted-foreground))]">
+              your website already has.
+            </span>
+          </h1>
+          <p className="animate-fade-up animation-delay-100 mx-auto mt-5 max-w-md text-[hsl(var(--muted-foreground))]">
+            Extract colors, typography, voice, and personality from any
+            website. Open source.
+          </p>
 
-            {/* Form column */}
-            <div className="animate-fade-up animation-delay-200 md:col-span-5 md:self-end">
-              <form onSubmit={handleExtract} className="relative">
-                <Input
-                  type="text"
-                  placeholder="Enter any website URL..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="h-14 rounded-2xl pr-14 text-base"
-                  required
-                  disabled={isExtracting}
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="icon"
-                  className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-xl"
-                  disabled={isExtracting}
-                >
-                  {isExtracting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowUpRight className="h-4 w-4" />
-                  )}
-                </Button>
-              </form>
+          {/* The input — the focal point */}
+          <div className="animate-fade-up animation-delay-200 mx-auto mt-10 w-full max-w-xl">
+            <form onSubmit={handleExtract} className="relative">
+              <Input
+                type="text"
+                placeholder="stripe.com"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="h-16 rounded-2xl border-[hsl(var(--border))] pl-6 pr-16 text-lg shadow-sm transition-shadow focus:shadow-md"
+                required
+                disabled={isExtracting}
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                size="icon"
+                className="absolute right-2.5 top-1/2 h-11 w-11 -translate-y-1/2 rounded-xl"
+                disabled={isExtracting}
+              >
+                {isExtracting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUpRight className="h-4 w-4" />
+                )}
+              </Button>
+            </form>
 
-              {/* Status messages below form */}
+            {/* Status area — fixed height to prevent layout shift */}
+            <div className="mt-4 min-h-[3.5rem]">
               {state.phase === "idle" && (
-                <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
-                  Free to try. No credit card required.
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Paste any URL. No signup required.
                 </p>
               )}
 
               {isExtracting && (
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-[hsl(var(--foreground))] animate-pulse" />
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--foreground))] animate-pulse" />
                     <span className="text-sm text-[hsl(var(--muted-foreground))]">
                       {STEP_LABELS[state.step] || "Processing..."}
                     </span>
                   </div>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]">
+                  <div className="mx-auto h-1 max-w-xs overflow-hidden rounded-full bg-[hsl(var(--muted))]">
                     <div
                       className="h-full rounded-full bg-[hsl(var(--foreground))] transition-all duration-700 ease-out"
                       style={{ width: `${state.percent}%` }}
                     />
                   </div>
-                  {state.domain && (
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      Extracting {state.domain}...
-                    </p>
-                  )}
                 </div>
               )}
 
               {isComplete && (
-                <div className="mt-4 flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                <div className="flex items-center justify-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   <span className="text-sm font-medium">
-                    Done! Redirecting to brand kit...
+                    Done — opening brand kit...
                   </span>
                 </div>
               )}
 
               {isRateLimited && (
-                <div className="mt-4 space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/50 p-4">
+                <div className="mx-auto max-w-sm space-y-3 rounded-xl border border-[hsl(var(--border))] p-4 text-left">
                   <p className="text-sm font-medium">
                     You&apos;ve used your 3 free extractions today
                   </p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    Sign up for a free account to get 50 extractions per month — no credit card required.
+                    Create a free account for 50 extractions/month.
                   </p>
                   <div className="flex gap-2">
                     <Button asChild size="sm">
@@ -344,7 +337,7 @@ export default function LandingPage() {
               )}
 
               {isError && (
-                <div className="mt-4 rounded-xl border border-[hsl(var(--destructive))]/20 bg-[hsl(var(--destructive))]/5 p-3">
+                <div className="mx-auto max-w-sm rounded-xl border border-[hsl(var(--destructive))]/20 bg-[hsl(var(--destructive))]/5 p-3 text-left">
                   <p className="text-sm text-[hsl(var(--destructive))]">
                     {state.message}
                   </p>
@@ -357,6 +350,22 @@ export default function LandingPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Social proof — recently extracted domains inline */}
+          <div className="animate-fade-up animation-delay-300 mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <span className="text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+              Recently extracted
+            </span>
+            {recentlyExtracted.map((brand) => (
+              <Link
+                key={brand.domain}
+                to={`/brand/${brand.domain}`}
+                className="text-sm font-medium text-[hsl(var(--muted-foreground))] underline-offset-4 transition-colors hover:text-[hsl(var(--foreground))] hover:underline"
+              >
+                {brand.domain}
+              </Link>
+            ))}
           </div>
         </div>
       </section>
