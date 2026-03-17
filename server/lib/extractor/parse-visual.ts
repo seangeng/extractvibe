@@ -28,6 +28,11 @@ import type {
   RGB,
   BorderRadiusScale,
   GridSystem,
+  ButtonStyle,
+  BrandButtons,
+  ShadowValue,
+  GradientValue,
+  BrandEffects,
 } from "../../schema/v1";
 import type { Env } from "../../env";
 
@@ -94,6 +99,14 @@ export interface FetchRenderOutput {
   headings: HeadingEntry[];
   /** Raw elements with their spacing/layout properties */
   layoutElements?: ComputedStyleEntry[];
+  /** Enriched button details from fetch-render */
+  buttonDetails?: Array<{ selector: string; tag: string; styles: Record<string, string>; textContent?: string; className?: string }>;
+  /** Shadow samples from cards/modals/dropdowns */
+  shadows?: Array<{ value: string; selector: string }>;
+  /** Gradient samples from backgrounds */
+  gradients?: Array<{ value: string; selector: string }>;
+  /** Open Graph image URL */
+  ogImage?: string | null;
 }
 
 // ─── Output ──────────────────────────────────────────────────────────
@@ -105,6 +118,9 @@ export interface ParseVisualOutput {
   typography: BrandTypography;
   spacing: BrandSpacing;
   assets: BrandAsset[];
+  buttons: BrandButtons;
+  effects: BrandEffects;
+  ogImage?: string;
 }
 
 // ─── Named CSS Colors (subset of most common) ───────────────────────
@@ -978,6 +994,41 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       continue;
     }
 
+    // Handle text samples — detect secondary/muted text colors
+    if (selector.startsWith("text-sample")) {
+      const value = entry.styles["color"];
+      if (!value) continue;
+      const parsed = parseColor(value);
+      if (!parsed) continue;
+
+      // Check if this is different enough from primary text to be "secondary"
+      const primaryText = collectedColors.find(c => c.role === "text" && c.mode === "light");
+      if (primaryText) {
+        const dist = colorDistance(parsed.rgb, primaryText.rgb);
+        if (dist > 30) {
+          // This is a meaningfully different text color — secondary/muted candidate
+          collectedColors.push({
+            hex: parsed.hex,
+            rgb: parsed.rgb,
+            role: "muted",
+            source: `computed: ${entry.selector} color`,
+            confidence: 0.6,
+            mode: "light",
+          });
+          collectedColors.push({
+            hex: parsed.hex,
+            rgb: parsed.rgb,
+            role: "secondaryText",
+            source: `computed: ${entry.selector} color`,
+            confidence: 0.6,
+            mode: "light",
+          });
+        }
+      }
+      rawPaletteMap.set(parsed.hex, { hex: parsed.hex, rgb: parsed.rgb, source: `computed: ${entry.selector}` });
+      continue;
+    }
+
     const mappings = elementRoleMap[selector];
     if (!mappings) continue;
 
@@ -1003,6 +1054,20 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
         source: `computed: ${entry.selector}`,
       });
     }
+  }
+
+  // Background fallback: if no background role collected, infer white
+  const hasBackground = collectedColors.some(c => c.role === "background" && c.mode === "light");
+  if (!hasBackground) {
+    collectedColors.push({
+      hex: "#ffffff",
+      rgb: { r: 255, g: 255, b: 255 },
+      role: "background",
+      source: "inferred: default white (body transparent)",
+      confidence: 0.5,
+      mode: "light",
+    });
+    rawPaletteMap.set("#ffffff", { hex: "#ffffff", rgb: { r: 255, g: 255, b: 255 }, source: "inferred" });
   }
 
   // --- Meta theme-color ---
@@ -1094,6 +1159,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     "background",
     "surface",
     "text",
+    "secondaryText",
     "border",
     "link",
     "muted",
@@ -1147,6 +1213,42 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
         source: best.source,
         confidence: best.confidence,
       };
+    }
+  }
+
+  // Smart inference: fill missing roles from rawPalette using heuristics
+  const unfilledRoles = roleKeys.filter(r => !lightMode[r]);
+  if (unfilledRoles.length > 0 && deduplicatedPalette.length > 0) {
+    for (const color of deduplicatedPalette) {
+      if (!color.rgb) continue;
+      const { r, g, b } = color.rgb;
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const saturation = max === 0 ? 0 : (max - min) / max;
+
+      // background: very light color (luminance > 0.9)
+      if (unfilledRoles.includes("background") && luminance > 0.9 && !lightMode["background"]) {
+        lightMode["background"] = { hex: color.hex, rgb: color.rgb, role: "background", source: "inferred: lightest in palette", confidence: 0.4 };
+      }
+
+      // muted: medium gray, low saturation
+      if (unfilledRoles.includes("muted") && saturation < 0.15 && luminance > 0.3 && luminance < 0.7 && !lightMode["muted"]) {
+        lightMode["muted"] = { hex: color.hex, rgb: color.rgb, role: "muted", source: "inferred: gray in palette", confidence: 0.4 };
+      }
+
+      // border: light grayish
+      if (unfilledRoles.includes("border") && saturation < 0.15 && luminance > 0.65 && luminance < 0.92 && !lightMode["border"]) {
+        lightMode["border"] = { hex: color.hex, rgb: color.rgb, role: "border", source: "inferred: light gray in palette", confidence: 0.35 };
+      }
+
+      // accent: saturated color that isn't the primary
+      if (unfilledRoles.includes("accent") && saturation > 0.3 && !lightMode["accent"]) {
+        const primary = lightMode["primary"];
+        if (primary?.rgb && colorDistance(color.rgb, primary.rgb) > 30) {
+          lightMode["accent"] = { hex: color.hex, rgb: color.rgb, role: "accent", source: "inferred: saturated non-primary", confidence: 0.4 };
+        }
+      }
     }
   }
 
@@ -1627,7 +1729,145 @@ function countGridColumns(gridTemplateCols: string): number {
   return parts.length;
 }
 
-// ─── 5. Parse Identity ───────────────────────────────────────────────
+// ─── 5. Parse Buttons ────────────────────────────────────────────────
+
+function parseButtons(fetchOutput: FetchRenderOutput): BrandButtons {
+  const styles: ButtonStyle[] = [];
+
+  // Collect button data from computedStyles (button-sample-* entries)
+  const buttonEntries = fetchOutput.computedStyles.filter(
+    e => e.selector.startsWith("button-sample")
+  );
+
+  for (const entry of buttonEntries) {
+    const bg = entry.styles["background-color"] || entry.styles["backgroundColor"];
+    const color = entry.styles["color"];
+    const borderWidth = entry.styles["border-width"] || entry.styles["borderWidth"];
+    const borderColor = entry.styles["border-color"] || entry.styles["borderColor"];
+    const borderRadius = entry.styles["border-radius"] || entry.styles["borderRadius"];
+    const padding = entry.styles["padding"];
+    const fontSize = entry.styles["font-size"] || entry.styles["fontSize"];
+    const fontWeight = entry.styles["font-weight"] || entry.styles["fontWeight"];
+    const boxShadow = entry.styles["box-shadow"] || entry.styles["boxShadow"];
+    const textContent = entry.styles["text-content"] || "";
+    const className = entry.styles["class-name"] || "";
+
+    const parsedBg = bg ? parseColor(bg) : null;
+    const parsedColor = color ? parseColor(color) : null;
+    const parsedBorder = borderColor ? parseColor(borderColor) : null;
+
+    const hasBg = parsedBg !== null;
+    const hasBorder = borderWidth && borderWidth !== "0px" && borderWidth !== "0";
+
+    // Classify variant
+    let variant: ButtonStyle["variant"] = "text";
+    let confidence = 0.5;
+
+    if (hasBg) {
+      // Check if bg is saturated (not white/black/gray)
+      const rgb = parsedBg.rgb;
+      const max = Math.max(rgb.r, rgb.g, rgb.b);
+      const min = Math.min(rgb.r, rgb.g, rgb.b);
+      const saturation = max === 0 ? 0 : (max - min) / max;
+      const lightness = (max + min) / 510; // 0-1
+
+      if (saturation > 0.3 && lightness > 0.1 && lightness < 0.9) {
+        variant = "primary";
+        confidence = 0.85;
+      } else if (lightness > 0.85) {
+        variant = "secondary";
+        confidence = 0.6;
+      } else {
+        variant = "secondary";
+        confidence = 0.5;
+      }
+    } else if (hasBorder) {
+      variant = "outline";
+      confidence = 0.7;
+    } else {
+      variant = "ghost";
+      confidence = 0.4;
+    }
+
+    // Boost confidence from text content
+    const lowerText = textContent.toLowerCase();
+    if (lowerText.includes("get started") || lowerText.includes("sign up") || lowerText.includes("start now") || lowerText.includes("try free") || lowerText.includes("buy")) {
+      if (variant === "primary") confidence = Math.min(confidence + 0.1, 1);
+    }
+
+    // Boost from class name
+    const lowerClass = className.toLowerCase();
+    if (lowerClass.includes("primary") || lowerClass.includes("cta")) {
+      if (variant === "primary") confidence = Math.min(confidence + 0.1, 1);
+    }
+
+    styles.push({
+      variant,
+      backgroundColor: parsedBg?.hex,
+      textColor: parsedColor?.hex,
+      borderRadius: borderRadius || undefined,
+      borderColor: parsedBorder?.hex,
+      borderWidth: hasBorder ? borderWidth : undefined,
+      padding: padding || undefined,
+      fontSize: fontSize || undefined,
+      fontWeight: fontWeight ? parseFontWeight(fontWeight) : undefined,
+      boxShadow: boxShadow || undefined,
+      sampleText: textContent || undefined,
+      confidence,
+    });
+  }
+
+  // Deduplicate: keep highest confidence per variant
+  const variantMap = new Map<string, ButtonStyle>();
+  for (const s of styles) {
+    const existing = variantMap.get(s.variant);
+    if (!existing || (s.confidence || 0) > (existing.confidence || 0)) {
+      variantMap.set(s.variant, s);
+    }
+  }
+
+  return { styles: Array.from(variantMap.values()) };
+}
+
+// ─── 6. Parse Effects ────────────────────────────────────────────────
+
+function parseEffects(fetchOutput: FetchRenderOutput): BrandEffects {
+  const shadows: ShadowValue[] = [];
+  const gradients: GradientValue[] = [];
+
+  // Shadows from dedicated field
+  for (const s of fetchOutput.shadows || []) {
+    if (!s.value || s.value === "none") continue;
+    const sel = s.selector.toLowerCase();
+    let context: ShadowValue["context"] = "element";
+    if (sel.includes("card")) context = "card";
+    else if (sel.includes("button") || sel.includes("btn")) context = "button";
+    else if (sel.includes("nav") || sel === "header") context = "navigation";
+    else if (sel.includes("drop") || sel.includes("menu")) context = "dropdown";
+    else if (sel.includes("modal") || sel.includes("dialog")) context = "modal";
+
+    shadows.push({ value: s.value, source: s.selector, context });
+  }
+
+  // Also check button samples for shadows
+  for (const entry of fetchOutput.computedStyles) {
+    if (!entry.selector.startsWith("button-sample")) continue;
+    const shadow = entry.styles["box-shadow"] || entry.styles["boxShadow"];
+    if (shadow && shadow !== "none" && !shadows.some(s => s.value === shadow)) {
+      shadows.push({ value: shadow, source: entry.selector, context: "button" });
+    }
+  }
+
+  // Gradients
+  for (const g of fetchOutput.gradients || []) {
+    if (!g.value || g.value === "none") continue;
+    gradients.push({ value: g.value, source: g.selector, context: g.selector });
+  }
+
+  return { shadows, gradients };
+}
+
+// ─── 7. Parse Identity ───────────────────────────────────────────────
 
 function parseIdentity(fetchOutput: FetchRenderOutput): BrandIdentity {
   return {
@@ -1677,5 +1917,8 @@ export async function parseVisualIdentity(
     typography,
     spacing,
     assets: logoResult.assets,
+    buttons: parseButtons(fetchOutput),
+    effects: parseEffects(fetchOutput),
+    ogImage: fetchOutput.ogImage || undefined,
   };
 }

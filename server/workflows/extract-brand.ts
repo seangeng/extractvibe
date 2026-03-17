@@ -122,6 +122,9 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
                 : parseInt(h.tag?.replace("h", "") || "1", 10),
             text: h.text,
           })),
+          shadows: fetchData.shadows || [],
+          gradients: fetchData.gradients || [],
+          ogImage: fetchData.ogImage || null,
         };
 
         const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
@@ -237,6 +240,9 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           kit.typography = visualData.typography;
           kit.spacing = visualData.spacing;
           kit.assets = visualData.assets;
+          if (visualData.buttons) kit.buttons = visualData.buttons;
+          if (visualData.effects) kit.effects = visualData.effects;
+          if (visualData.ogImage) kit.ogImage = visualData.ogImage;
         }
 
         if (voiceData) {

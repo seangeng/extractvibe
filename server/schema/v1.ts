@@ -129,6 +129,7 @@ export interface ColorMode {
   background?: ColorValue;
   surface?: ColorValue;
   text?: ColorValue;
+  secondaryText?: ColorValue;
   border?: ColorValue;
   link?: ColorValue;
   muted?: ColorValue;
@@ -393,6 +394,52 @@ export interface OfficialGuidelines {
   guidelineRules?: string[];
 }
 
+// ─── Buttons ────────────────────────────────────────────────────────
+
+/** A single button variant style extracted from the site. */
+export interface ButtonStyle {
+  variant: "primary" | "secondary" | "outline" | "ghost" | "text";
+  backgroundColor?: string;
+  textColor?: string;
+  borderRadius?: string;
+  borderColor?: string;
+  borderWidth?: string;
+  padding?: string;
+  fontSize?: string;
+  fontWeight?: number;
+  fontFamily?: string;
+  boxShadow?: string;
+  sampleText?: string;
+  confidence?: number;
+}
+
+/** All detected button styles on the site. */
+export interface BrandButtons {
+  styles: ButtonStyle[];
+}
+
+// ─── Effects ────────────────────────────────────────────────────────
+
+/** A single box-shadow value with provenance. */
+export interface ShadowValue {
+  value: string;
+  source?: string;
+  context?: "card" | "button" | "navigation" | "dropdown" | "modal" | "element";
+}
+
+/** A single gradient value with provenance. */
+export interface GradientValue {
+  value: string;
+  source?: string;
+  context?: string;
+}
+
+/** Shadows and gradients used across the site. */
+export interface BrandEffects {
+  shadows: ShadowValue[];
+  gradients: GradientValue[];
+}
+
 // ─── Top-Level Brand Kit ─────────────────────────────────────────────
 
 /** The complete brand kit result returned by an ExtractVibe extraction. */
@@ -408,6 +455,9 @@ export interface ExtractVibeBrandKit {
   rules?: BrandRules;
   vibe?: BrandVibe;
   officialGuidelines?: OfficialGuidelines;
+  buttons?: BrandButtons;
+  effects?: BrandEffects;
+  ogImage?: string;
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────
@@ -486,5 +536,8 @@ export function createEmptyBrandKit(url: string): ExtractVibeBrandKit {
       hasOfficialKit: false,
       guidelineRules: [],
     },
+    buttons: { styles: [] },
+    effects: { shadows: [], gradients: [] },
+    ogImage: undefined,
   };
 }

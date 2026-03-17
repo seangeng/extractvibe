@@ -27,6 +27,8 @@ export interface FetchRenderOutput {
     styles: Record<string, string>;
   }>;
   cssCustomProperties: Record<string, string>;
+  shadows: Array<{ value: string; selector: string }>;
+  gradients: Array<{ value: string; selector: string }>;
 
   // Icons & logos
   icons: Array<{ rel: string; href: string; sizes?: string; type?: string }>;
@@ -405,6 +407,8 @@ interface StylesExtractionResult {
   }>;
   cssCustomProperties: Record<string, string>;
   backgroundImages: Array<{ url: string; selector: string }>;
+  shadows: Array<{ value: string; selector: string }>;
+  gradients: Array<{ value: string; selector: string }>;
 }
 
 function extractStyles(): StylesExtractionResult {
@@ -420,6 +424,11 @@ function extractStyles(): StylesExtractionResult {
     "border-radius",
     "padding",
     "margin",
+    "box-shadow",
+    "border-color",
+    "border-width",
+    "border-style",
+    "background-image",
   ] as const;
 
   const SELECTORS: Array<{ selector: string; tag: string }> = [
@@ -473,14 +482,19 @@ function extractStyles(): StylesExtractionResult {
     elementStyles.push({ selector, tag, styles });
   }
 
-  // ---- Sample buttons/links with non-transparent backgrounds ----
+  // ---- Sample buttons/links with non-transparent backgrounds or visible borders ----
 
   const btns = document.querySelectorAll("a, button");
   let btnCount = 0;
-  for (let i = 0; i < btns.length && btnCount < 10; i++) {
+  for (let i = 0; i < btns.length && btnCount < 15; i++) {
     const computed = getComputedStyle(btns[i]);
     const bg = computed.backgroundColor;
-    if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+    const borderWidth = computed.borderWidth;
+    const hasBg = bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+    const hasBorder = borderWidth && borderWidth !== "0px" && borderWidth !== "0";
+
+    // Capture buttons with visible background OR visible border
+    if (hasBg || hasBorder) {
       elementStyles.push({
         selector: `button-sample-${btnCount}`,
         tag: btns[i].tagName.toLowerCase(),
@@ -491,6 +505,14 @@ function extractStyles(): StylesExtractionResult {
           "font-size": computed.fontSize,
           "font-weight": computed.fontWeight,
           "border-radius": computed.borderRadius,
+          "border-color": computed.borderColor,
+          "border-width": computed.borderWidth,
+          "border-style": computed.borderStyle,
+          "padding": computed.padding,
+          "box-shadow": computed.boxShadow !== "none" ? computed.boxShadow : "",
+          "background-image": computed.backgroundImage !== "none" ? computed.backgroundImage : "",
+          "text-content": btns[i].textContent?.trim().slice(0, 80) || "",
+          "class-name": btns[i].className?.toString().slice(0, 200) || "",
         },
       });
       btnCount++;
@@ -515,6 +537,95 @@ function extractStyles(): StylesExtractionResult {
       });
       secCount++;
     }
+  }
+
+  // ---- Sample box-shadows from cards, modals, dropdowns, etc. ----
+
+  const shadowSelectors = [
+    '[class*="card"]', '[class*="Card"]',
+    '[class*="dropdown"]', '[class*="Dropdown"]',
+    '[class*="menu"]', '[class*="Menu"]',
+    '[class*="modal"]', '[class*="Modal"]',
+    '[class*="dialog"]', '[class*="Dialog"]',
+    '[class*="popover"]', '[class*="Popover"]',
+    '[class*="tooltip"]',
+    'header', 'nav',
+    '[class*="shadow"]',
+  ];
+  const shadowMap = new Map<string, string>();
+  for (const sel of shadowSelectors) {
+    try {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (shadowMap.size >= 15) return;
+        const shadow = getComputedStyle(el).boxShadow;
+        if (shadow && shadow !== "none" && !shadowMap.has(shadow)) {
+          shadowMap.set(shadow, sel);
+        }
+      });
+    } catch {
+      /* skip invalid selectors */
+    }
+  }
+  const shadows = Array.from(shadowMap.entries()).map((entry) => ({
+    value: entry[0],
+    selector: entry[1],
+  }));
+
+  // ---- Extract gradients from backgrounds ----
+
+  const gradients: Array<{ value: string; selector: string }> = [];
+  const gradientSelectors = [
+    "body", "main", "header", "section",
+    '[class*="hero"]', '[class*="Hero"]',
+    '[class*="banner"]', '[class*="Banner"]',
+    '[class*="gradient"]', '[class*="Gradient"]',
+    '[class*="bg-"]',
+  ];
+  const seenGradients = new Set<string>();
+  for (const gsel of gradientSelectors) {
+    try {
+      document.querySelectorAll(gsel).forEach((el) => {
+        if (gradients.length >= 10) return;
+        const bgImg = getComputedStyle(el).backgroundImage;
+        if (
+          bgImg &&
+          bgImg !== "none" &&
+          (bgImg.includes("gradient") ||
+            bgImg.includes("linear") ||
+            bgImg.includes("radial") ||
+            bgImg.includes("conic"))
+        ) {
+          if (!seenGradients.has(bgImg)) {
+            seenGradients.add(bgImg);
+            gradients.push({ value: bgImg, selector: gsel });
+          }
+        }
+      });
+    } catch {
+      /* skip */
+    }
+  }
+
+  // ---- Sample text colors from paragraphs and spans ----
+
+  const textEls = document.querySelectorAll("p, span, li");
+  const textColorCounts: Record<string, number> = {};
+  for (let ti = 0; ti < Math.min(textEls.length, 100); ti++) {
+    const tc = getComputedStyle(textEls[ti]).color;
+    if (tc) {
+      textColorCounts[tc] = (textColorCounts[tc] || 0) + 1;
+    }
+  }
+  // Sort by frequency, take top 5 unique text colors
+  const sortedTextColors = Object.entries(textColorCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  for (let sci = 0; sci < sortedTextColors.length; sci++) {
+    elementStyles.push({
+      selector: `text-sample-${sci}`,
+      tag: "p",
+      styles: { color: sortedTextColors[sci][0] },
+    });
   }
 
   // ---- CSS custom properties from :root ----
@@ -599,7 +710,7 @@ function extractStyles(): StylesExtractionResult {
     });
   }
 
-  return { elementStyles, cssCustomProperties, backgroundImages };
+  return { elementStyles, cssCustomProperties, backgroundImages, shadows, gradients };
 }
 
 // ---------------------------------------------------------------------------
@@ -648,6 +759,8 @@ export async function fetchAndRender(
     bodyText: "",
     elementStyles: [],
     cssCustomProperties: {},
+    shadows: [],
+    gradients: [],
     icons: [],
     logoImages: [],
     inlineSvgs: [],
@@ -717,6 +830,8 @@ export async function fetchAndRender(
         elementStyles: [],
         cssCustomProperties: {},
         backgroundImages: [],
+        shadows: [],
+        gradients: [],
       };
     }
 
@@ -783,6 +898,8 @@ export async function fetchAndRender(
       // Computed styles
       elementStyles: stylesResult.elementStyles,
       cssCustomProperties: stylesResult.cssCustomProperties,
+      shadows: stylesResult.shadows,
+      gradients: stylesResult.gradients,
 
       // Icons & logos
       icons: domResult.icons,
