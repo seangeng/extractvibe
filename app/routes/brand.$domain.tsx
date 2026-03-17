@@ -139,13 +139,22 @@ function ToneBar({
   );
 }
 
+function buildFontStack(family: FontFamily): string {
+  const parts = [JSON.stringify(family.name)];
+  if (family.fallbackStack) {
+    parts.push(family.fallbackStack);
+  }
+  parts.push("system-ui", "sans-serif");
+  return parts.join(", ");
+}
+
 function FontFamilyCard({ family }: { family: FontFamily }) {
   return (
     <div className="space-y-2 rounded-xl border border-[hsl(var(--border))] p-4">
       <div className="flex items-start justify-between gap-2">
         <h4
-          className="font-display text-lg font-semibold"
-          style={{ fontFamily: family.name }}
+          className="text-lg font-semibold"
+          style={{ fontFamily: buildFontStack(family) }}
         >
           {family.name || "Unknown"}
         </h4>
@@ -180,7 +189,7 @@ function FontFamilyCard({ family }: { family: FontFamily }) {
   );
 }
 
-function TypeScalePreview({ scale }: { scale: TypeScale }) {
+function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: FontFamily[] }) {
   const sizeMap: Record<string, string> = {
     h1: "text-3xl",
     h2: "text-2xl",
@@ -192,6 +201,23 @@ function TypeScalePreview({ scale }: { scale: TypeScale }) {
     small: "text-sm",
     caption: "text-xs",
   };
+
+  // Build a lookup from font name → full CSS font stack
+  const fontStackLookup = new Map<string, string>();
+  for (const fam of families || []) {
+    fontStackLookup.set(fam.name, buildFontStack(fam));
+  }
+
+  function getFontStack(entry: TypeScaleEntry): string {
+    if (entry.fontFamily) {
+      const stack = fontStackLookup.get(entry.fontFamily);
+      if (stack) return stack;
+      return `${JSON.stringify(entry.fontFamily)}, system-ui, sans-serif`;
+    }
+    // Default: use first family if available
+    const first = families?.[0];
+    return first ? buildFontStack(first) : "system-ui, sans-serif";
+  }
 
   const entries = Object.entries(scale).filter(
     ([, v]) => v && (v as TypeScaleEntry).fontSize
@@ -216,9 +242,10 @@ function TypeScalePreview({ scale }: { scale: TypeScale }) {
             <p
               className={cn(
                 sizeMap[level] || "text-base",
-                "flex-1 font-semibold leading-tight"
+                "flex-1 leading-tight"
               )}
               style={{
+                fontFamily: getFontStack(entry),
                 fontWeight: entry.fontWeight || undefined,
                 letterSpacing: entry.letterSpacing || undefined,
               }}
@@ -400,7 +427,7 @@ export default function PublicBrandPage({
                 </div>
               )}
               {/* Type scale preview */}
-              {typography.scale && <TypeScalePreview scale={typography.scale} />}
+              {typography.scale && <TypeScalePreview scale={typography.scale} families={typography.families} />}
             </section>
           )}
 

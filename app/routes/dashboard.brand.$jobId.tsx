@@ -282,9 +282,11 @@ function ColorModeSection({
 function TypeScaleRow({
   level,
   entry,
+  families,
 }: {
   level: string;
   entry: TypeScaleEntry;
+  families?: FontFamily[];
 }) {
   const sizeMap: Record<string, string> = {
     h1: "text-4xl",
@@ -298,6 +300,16 @@ function TypeScaleRow({
     caption: "text-xs",
   };
 
+  function getFontStack(): string {
+    if (entry.fontFamily && families) {
+      const match = families.find((f) => f.name === entry.fontFamily);
+      if (match) return buildFontStack(match);
+      return `${JSON.stringify(entry.fontFamily)}, system-ui, sans-serif`;
+    }
+    const first = families?.[0];
+    return first ? buildFontStack(first) : "system-ui, sans-serif";
+  }
+
   return (
     <div className="flex flex-col gap-1 rounded-xl border border-[hsl(var(--border))] p-4 sm:flex-row sm:items-center sm:gap-6">
       <div className="w-24 shrink-0">
@@ -307,8 +319,9 @@ function TypeScaleRow({
       </div>
       <div className="flex-1">
         <p
-          className={cn(sizeMap[level] || "text-base", "font-semibold leading-tight")}
+          className={cn(sizeMap[level] || "text-base", "leading-tight")}
           style={{
+            fontFamily: getFontStack(),
             fontWeight: entry.fontWeight || undefined,
             letterSpacing: entry.letterSpacing || undefined,
             textTransform: (entry.textTransform as React.CSSProperties["textTransform"]) || undefined,
@@ -330,6 +343,17 @@ function TypeScaleRow({
   );
 }
 
+// ─── Font Helpers ───────────────────────────────────────────────────────
+
+function buildFontStack(family: FontFamily): string {
+  const parts = [JSON.stringify(family.name)];
+  if (family.fallbackStack) {
+    parts.push(family.fallbackStack);
+  }
+  parts.push("system-ui", "sans-serif");
+  return parts.join(", ");
+}
+
 // ─── Font Family Card ───────────────────────────────────────────────────
 
 function FontFamilyCard({
@@ -340,7 +364,7 @@ function FontFamilyCard({
   return (
     <div className="space-y-3 rounded-xl border border-[hsl(var(--border))] p-4">
       <div className="flex items-start justify-between gap-2">
-        <h4 className="font-display text-lg font-semibold" style={{ fontFamily: family.name }}>
+        <h4 className="text-lg font-semibold" style={{ fontFamily: buildFontStack(family) }}>
           {family.name || "Unknown"}
         </h4>
         <div className="flex gap-1.5">
@@ -952,7 +976,7 @@ export default function BrandKitPage() {
                 </h4>
                 <div className="space-y-2">
                   {scaleEntries.map(([level, entry]) => (
-                    <TypeScaleRow key={level} level={level} entry={entry} />
+                    <TypeScaleRow key={level} level={level} entry={entry} families={typography.families} />
                   ))}
                 </div>
               </div>
