@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, Link } from "react-router";
-import { ArrowUpRight, Github } from "lucide-react";
+import { ArrowUpRight, Github, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { useSession } from "~/lib/auth-client";
+import { api } from "~/lib/api";
 
 export function meta() {
   return [
@@ -48,26 +49,157 @@ function normalizeUrl(input: string): string {
   return `https://${trimmed}`;
 }
 
+type ExtractState =
+  | { phase: "idle" }
+  | { phase: "extracting"; domain: string; jobId: string; percent: number; step: string }
+  | { phase: "complete"; domain: string }
+  | { phase: "rate-limited" }
+  | { phase: "error"; message: string };
+
+const STEP_LABELS: Record<string, string> = {
+  "fetch-render": "Fetching & rendering",
+  "parse-assets": "Parsing visual identity",
+  "analyze-voice": "Analyzing brand voice",
+  "synthesize-vibe": "Synthesizing vibe",
+  "score-package": "Packaging results",
+};
+
 export default function LandingPage() {
   const [url, setUrl] = useState("");
   const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
+  const [state, setState] = useState<ExtractState>({ phase: "idle" });
   const navigate = useNavigate();
   const { data: session } = useSession();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  function handleExtract(e: React.FormEvent) {
-    e.preventDefault();
-    if (!url.trim()) return;
-    const normalizedUrl = normalizeUrl(url);
-    const encoded = encodeURIComponent(normalizedUrl);
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      wsRef.current?.close();
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
-    if (session?.user) {
-      navigate(`/dashboard/extract?url=${encoded}`);
-    } else {
-      navigate(
-        `/sign-up?redirect=${encodeURIComponent(`/dashboard/extract?url=${encoded}`)}`
-      );
+  // Navigate to brand page on completion
+  useEffect(() => {
+    if (state.phase === "complete") {
+      const timer = setTimeout(() => {
+        navigate(`/brand/${state.domain}`);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [state, navigate]);
+
+  const handleProgress = useCallback((data: any) => {
+    if (data.type === "progress") {
+      setState((prev) => {
+        if (prev.phase !== "extracting") return prev;
+        return {
+          ...prev,
+          percent: data.percent ?? prev.percent,
+          step: data.step || data.stepId || prev.step,
+        };
+      });
+    }
+    if (data.type === "complete") {
+      setState((prev) => {
+        if (prev.phase !== "extracting") return prev;
+        return { phase: "complete", domain: prev.domain };
+      });
+    }
+    if (data.type === "error") {
+      setState({ phase: "error", message: data.message || "Extraction failed." });
+    }
+  }, []);
+
+  function connectWebSocket(jobId: string) {
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/${jobId}`);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          handleProgress(JSON.parse(event.data));
+        } catch { /* ignore */ }
+      };
+      ws.onerror = () => startPolling(jobId);
+      ws.onclose = () => { wsRef.current = null; };
+    } catch {
+      startPolling(jobId);
     }
   }
+
+  function startPolling(jobId: string) {
+    pollRef.current = setInterval(async () => {
+      try {
+        const result = await api.get<{
+          jobId: string;
+          status: { status: string; error: any; output: any };
+        }>(`/api/extract/${jobId}`);
+
+        if (result.status.status === "complete") {
+          setState((prev) =>
+            prev.phase === "extracting" ? { phase: "complete", domain: prev.domain } : prev
+          );
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (result.status.status === "errored") {
+          setState({
+            phase: "error",
+            message: result.status.error?.message || "Extraction failed.",
+          });
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch { /* ignore polling errors */ }
+    }, 3000);
+  }
+
+  async function handleExtract(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url.trim()) return;
+    if (state.phase === "extracting") return;
+
+    const normalizedUrl = normalizeUrl(url);
+
+    // If logged in, go to the dashboard extract page for the full experience
+    if (session?.user) {
+      navigate(`/dashboard/extract?url=${encodeURIComponent(normalizedUrl)}`);
+      return;
+    }
+
+    // Anonymous: call API directly
+    setState({ phase: "extracting", domain: "", jobId: "", percent: 0, step: "fetch-render" });
+
+    try {
+      const result = await api.post<{ jobId: string; domain: string }>(
+        "/api/extract",
+        { url: normalizedUrl }
+      );
+      setState({
+        phase: "extracting",
+        domain: result.domain,
+        jobId: result.jobId,
+        percent: 5,
+        step: "fetch-render",
+      });
+      connectWebSocket(result.jobId);
+    } catch (err: any) {
+      if (err?.status === 429) {
+        setState({ phase: "rate-limited" });
+      } else {
+        setState({
+          phase: "error",
+          message: err?.message || "Failed to start extraction.",
+        });
+      }
+    }
+  }
+
+  const isExtracting = state.phase === "extracting";
+  const isRateLimited = state.phase === "rate-limited";
+  const isComplete = state.phase === "complete";
+  const isError = state.phase === "error";
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
@@ -79,18 +211,29 @@ export default function LandingPage() {
             <span className="text-lg font-bold tracking-tight">ExtractVibe</span>
           </Link>
           <div className="flex items-center gap-6">
-            <Link
-              to="/sign-in"
-              className="nav-link text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
-            >
-              Sign in
-            </Link>
-            <Button asChild size="sm">
-              <Link to="/sign-up">
-                Get started
-                <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            {session?.user ? (
+              <Button asChild size="sm">
+                <Link to="/dashboard">
+                  Dashboard
+                  <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Link
+                  to="/sign-in"
+                  className="nav-link text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                >
+                  Sign in
+                </Link>
+                <Button asChild size="sm">
+                  <Link to="/sign-up">
+                    Get started
+                    <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -123,19 +266,96 @@ export default function LandingPage() {
                   onChange={(e) => setUrl(e.target.value)}
                   className="h-14 rounded-2xl pr-14 text-base"
                   required
+                  disabled={isExtracting}
                 />
                 <Button
                   type="submit"
                   variant="primary"
                   size="icon"
                   className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-xl"
+                  disabled={isExtracting}
                 >
-                  <ArrowUpRight className="h-4 w-4" />
+                  {isExtracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpRight className="h-4 w-4" />
+                  )}
                 </Button>
               </form>
-              <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
-                Free to try. No credit card required.
-              </p>
+
+              {/* Status messages below form */}
+              {state.phase === "idle" && (
+                <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+                  Free to try. No credit card required.
+                </p>
+              )}
+
+              {isExtracting && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-[hsl(var(--foreground))] animate-pulse" />
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                      {STEP_LABELS[state.step] || "Processing..."}
+                    </span>
+                  </div>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]">
+                    <div
+                      className="h-full rounded-full bg-[hsl(var(--foreground))] transition-all duration-700 ease-out"
+                      style={{ width: `${state.percent}%` }}
+                    />
+                  </div>
+                  {state.domain && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                      Extracting {state.domain}...
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isComplete && (
+                <div className="mt-4 flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-sm font-medium">
+                    Done! Redirecting to brand kit...
+                  </span>
+                </div>
+              )}
+
+              {isRateLimited && (
+                <div className="mt-4 space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/50 p-4">
+                  <p className="text-sm font-medium">
+                    You&apos;ve used your 3 free extractions today
+                  </p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Sign up for a free account to get 50 extractions per month — no credit card required.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm">
+                      <Link to="/sign-up">
+                        Sign up free
+                        <ArrowUpRight className="ml-1 h-3 w-3" />
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/sign-in">Sign in</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {isError && (
+                <div className="mt-4 rounded-xl border border-[hsl(var(--destructive))]/20 bg-[hsl(var(--destructive))]/5 p-3">
+                  <p className="text-sm text-[hsl(var(--destructive))]">
+                    {state.message}
+                  </p>
+                  <button
+                    onClick={() => setState({ phase: "idle" })}
+                    className="mt-1 text-xs underline text-[hsl(var(--muted-foreground))]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
