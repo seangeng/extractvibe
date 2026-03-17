@@ -15,8 +15,12 @@ import type {
   BrandTypography,
   BrandVoice,
   BrandArchetype,
+  BrandButtons,
+  BrandEffects,
+  BrandSpacing,
   ColorValue,
   FontFamily,
+  ButtonStyle,
 } from "../../schema/v1";
 
 // ─── Input / Output Types ────────────────────────────────────────────
@@ -26,6 +30,9 @@ export interface VibeSynthesisInput {
   colors: BrandColors;
   typography: BrandTypography;
   voice: BrandVoice;
+  buttons?: BrandButtons;
+  effects?: BrandEffects;
+  spacing?: BrandSpacing;
   domain: string;
   url: string;
 }
@@ -148,6 +155,58 @@ function summarizeVoice(voice: BrandVoice): string {
   return parts.join("\n") || "No voice data available";
 }
 
+function summarizeButtons(buttons?: BrandButtons): string {
+  if (!buttons?.styles || buttons.styles.length === 0) return "No button data extracted.";
+  return buttons.styles.map((b: ButtonStyle) => {
+    const parts: string[] = [`${b.variant} button`];
+    if (b.backgroundColor) parts.push(`bg: ${b.backgroundColor}`);
+    if (b.textColor) parts.push(`text: ${b.textColor}`);
+    if (b.borderRadius) parts.push(`radius: ${b.borderRadius}`);
+    if (b.borderColor) parts.push(`border: ${b.borderColor}`);
+    if (b.padding) parts.push(`padding: ${b.padding}`);
+    if (b.boxShadow) parts.push(`shadow: ${b.boxShadow.substring(0, 60)}`);
+    if (b.sampleText) parts.push(`text: "${b.sampleText}"`);
+    return parts.join(", ");
+  }).join("\n");
+}
+
+function summarizeEffects(effects?: BrandEffects): string {
+  const parts: string[] = [];
+  if (effects?.shadows && effects.shadows.length > 0) {
+    parts.push(`Shadows found: ${effects.shadows.length}`);
+    for (const s of effects.shadows.slice(0, 3)) {
+      parts.push(`  [${s.context}] ${s.value.substring(0, 80)}`);
+    }
+  } else {
+    parts.push("No box-shadows detected.");
+  }
+  if (effects?.gradients && effects.gradients.length > 0) {
+    parts.push(`Gradients found: ${effects.gradients.length}`);
+    for (const g of effects.gradients.slice(0, 2)) {
+      parts.push(`  ${g.value.substring(0, 80)}`);
+    }
+  } else {
+    parts.push("No gradients detected.");
+  }
+  return parts.join("\n");
+}
+
+function summarizeSpacing(spacing?: BrandSpacing): string {
+  if (!spacing) return "No spacing data.";
+  const parts: string[] = [];
+  if (spacing.baseUnit) parts.push(`Base unit: ${spacing.baseUnit}`);
+  if (spacing.borderRadius) {
+    const br = spacing.borderRadius;
+    const radii: string[] = [];
+    if (br.small) radii.push(`small: ${br.small}`);
+    if (br.medium) radii.push(`medium: ${br.medium}`);
+    if (br.large) radii.push(`large: ${br.large}`);
+    if (br.pill) radii.push(`pill: ${br.pill}`);
+    if (radii.length > 0) parts.push(`Border radii: ${radii.join(", ")}`);
+  }
+  return parts.join("\n") || "No spacing data.";
+}
+
 function buildVibePrompt(input: VibeSynthesisInput): string {
   const brandLine = input.identity.brandName
     ? `Brand: ${input.identity.brandName}`
@@ -177,6 +236,15 @@ ${summarizeTypography(input.typography)}
 
 VOICE ANALYSIS:
 ${summarizeVoice(input.voice)}
+
+BUTTON STYLES:
+${summarizeButtons(input.buttons)}
+
+VISUAL EFFECTS:
+${summarizeEffects(input.effects)}
+
+SPACING & BORDER RADIUS:
+${summarizeSpacing(input.spacing)}
 </brand_data>
 
 Return ONLY a valid JSON object (no markdown fences, no explanation) with this exact structure:
@@ -216,12 +284,21 @@ Return ONLY a valid JSON object (no markdown fences, no explanation) with this e
 
 CRITICAL rules for the "dos" and "donts":
 - Be EXTREMELY SPECIFIC. Reference actual hex colors, font names, font weights, casing conventions, and patterns.
+- MUST include design style guidelines about:
+  * Button styling: border-radius, colors, padding, shadow (if any)
+  * Whether to use gradients, and if so what kind (based on extracted data)
+  * Whether to use shadows, and what style (subtle, multi-layer, none)
+  * Border radius style (sharp corners like 4px, rounded like 12px, or pill-shaped)
+  * Whether the design is flat/minimal or layered with depth effects
+  * Color usage: monochrome? limited palette? rich/vibrant?
 - BAD example: "Use consistent typography" — this is vague and useless.
 - GOOD example: "Use Inter 700 for headings and Inter 400 for body text, with 1.6 line-height."
 - BAD example: "Use brand colors for CTAs"
-- GOOD example: "Use #6366f1 as the primary CTA background color with white (#ffffff) text."
+- GOOD example: "Primary buttons: #6366f1 background, white text, 4px border-radius, no shadow."
+- BAD example: "Use appropriate shadows"
+- GOOD example: "Apply multi-layer shadows (rgba(0,0,0,0.1) 0 30px 60px -50px) on cards and dropdowns, never on buttons."
 - Each rule should be immediately actionable by a designer or developer.
-- Generate 5-8 rules for each list.
+- Generate 6-10 rules for each list, covering typography, colors, buttons, effects, and layout.
 
 For archetypes, pick the 1-2 most fitting archetypes with confidence scores.
 
