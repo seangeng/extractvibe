@@ -68,6 +68,73 @@ function getAllColors(mode?: ColorMode): { key: string; color: ColorValue }[] {
     .map(([key, v]) => ({ key, color: v as ColorValue }));
 }
 
+// ─── Color Ring Chart ───────────────────────────────────────────────────
+
+function ColorRing({ colors }: { colors: { key: string; color: ColorValue }[] }) {
+  const size = 160;
+  const strokeWidth = 20;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
+
+  // Filter out duplicate hex values and white/near-white backgrounds
+  const unique = colors.filter((c, i, arr) => {
+    if (!c.color.hex) return false;
+    return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
+  });
+
+  const count = unique.length;
+  if (count === 0) return null;
+
+  const sliceAngle = 360 / count;
+  const gapDegrees = 3;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block">
+      {unique.map((item, i) => {
+        const startAngle = i * sliceAngle + gapDegrees / 2;
+        const endAngle = (i + 1) * sliceAngle - gapDegrees / 2;
+        const startRad = ((startAngle - 90) * Math.PI) / 180;
+        const endRad = ((endAngle - 90) * Math.PI) / 180;
+        const x1 = center + radius * Math.cos(startRad);
+        const y1 = center + radius * Math.sin(startRad);
+        const x2 = center + radius * Math.cos(endRad);
+        const y2 = center + radius * Math.sin(endRad);
+        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+
+        return (
+          <path
+            key={item.key}
+            d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`}
+            fill="none"
+            stroke={item.color.hex}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+        );
+      })}
+      <text
+        x={center}
+        y={center - 6}
+        textAnchor="middle"
+        className="fill-[hsl(var(--foreground))] text-2xl font-bold"
+        style={{ fontSize: "28px", fontWeight: 700 }}
+      >
+        {count}
+      </text>
+      <text
+        x={center}
+        y={center + 14}
+        textAnchor="middle"
+        className="fill-[hsl(var(--muted-foreground))]"
+        style={{ fontSize: "11px" }}
+      >
+        colors
+      </text>
+    </svg>
+  );
+}
+
 // ─── Numbered Section Label ─────────────────────────────────────────────
 
 function SectionLabel({
@@ -315,11 +382,11 @@ export default function PublicBrandPage({
           </div>
           {/* Brand Logo */}
           {kit.logos && kit.logos.length > 0 && kit.logos[0].url && (
-            <div className="mb-1">
+            <div className="mb-3 inline-flex items-center justify-center rounded-xl bg-checkerboard p-4">
               <img
                 src={kit.logos[0].url}
                 alt={`${domain} logo`}
-                className="h-12 w-auto"
+                className="h-10 w-auto"
                 loading="lazy"
               />
             </div>
@@ -390,41 +457,51 @@ export default function PublicBrandPage({
           <section className="animate-fade-up animation-delay-100 space-y-5">
             <SectionLabel number="01" label="Color Palette" title="Colors" />
 
-            <div className="space-y-6">
-              {lightColors.length > 0 && (
-                <div className="space-y-3">
-                  {darkColors.length > 0 && (
-                    <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                      Light Mode
-                    </h4>
-                  )}
-                  <div className="flex flex-wrap gap-4">
-                    {lightColors.map(({ key, color }) => (
-                      <ColorSwatch
-                        key={key}
-                        color={{ ...color, role: color.role || key }}
-                      />
-                    ))}
-                  </div>
+            <div className="flex flex-col gap-8 md:flex-row md:items-start">
+              {/* Ring chart */}
+              {allDisplayColors.length >= 3 && (
+                <div className="flex-shrink-0 self-center md:self-start">
+                  <ColorRing colors={allDisplayColors} />
                 </div>
               )}
-              {darkColors.length > 0 && (
-                <div className="space-y-3">
-                  {lightColors.length > 0 && (
-                    <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                      Dark Mode
-                    </h4>
-                  )}
-                  <div className="flex flex-wrap gap-4">
-                    {darkColors.map(({ key, color }) => (
-                      <ColorSwatch
-                        key={key}
-                        color={{ ...color, role: color.role || key }}
-                      />
-                    ))}
+
+              {/* Swatches */}
+              <div className="flex-1 space-y-6">
+                {lightColors.length > 0 && (
+                  <div className="space-y-3">
+                    {darkColors.length > 0 && (
+                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                        Light Mode
+                      </h4>
+                    )}
+                    <div className="flex flex-wrap gap-4">
+                      {lightColors.map(({ key, color }) => (
+                        <ColorSwatch
+                          key={key}
+                          color={{ ...color, role: color.role || key }}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {darkColors.length > 0 && (
+                  <div className="space-y-3">
+                    {lightColors.length > 0 && (
+                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                        Dark Mode
+                      </h4>
+                    )}
+                    <div className="flex flex-wrap gap-4">
+                      {darkColors.map(({ key, color }) => (
+                        <ColorSwatch
+                          key={key}
+                          color={{ ...color, role: color.role || key }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}
@@ -565,8 +642,8 @@ export default function PublicBrandPage({
             <SectionLabel number="05" label="Design Assets" title="Visual Elements" />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {kit.designAssets.slice(0, 9).map((asset: BrandDesignAsset, i: number) => (
-                <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4">
-                  <div className="flex aspect-video items-center justify-center">
+                <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+                  <div className="flex aspect-video items-center justify-center bg-checkerboard p-4">
                     <img
                       src={asset.src}
                       alt={asset.alt || "Design asset"}
@@ -574,10 +651,10 @@ export default function PublicBrandPage({
                       loading="lazy"
                     />
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+                  <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-3 py-2 text-[10px] text-[hsl(var(--muted-foreground))]">
                     <span className="font-mono uppercase">{asset.format}</span>
                     {asset.width && asset.height && (
-                      <span>{asset.width}&times;{asset.height}</span>
+                      <span className="tabular-nums">{asset.width}&times;{asset.height}</span>
                     )}
                   </div>
                 </div>

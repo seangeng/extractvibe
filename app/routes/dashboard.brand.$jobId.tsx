@@ -541,7 +541,7 @@ export default function BrandKitPage() {
           <div>
             {/* Brand Logo */}
             {logos && logos.length > 0 && logos[0].url && (
-              <div className="mb-2">
+              <div className="mb-3 inline-flex items-center justify-center rounded-xl bg-checkerboard p-4">
                 <img
                   src={logos[0].url}
                   alt={`${domain} logo`}
@@ -1160,8 +1160,8 @@ export default function BrandKitPage() {
           <SectionLabel number="08" label="Design Assets" title="Visual Elements" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {designAssets.slice(0, 9).map((asset: BrandDesignAsset, i: number) => (
-              <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4">
-                <div className="flex aspect-video items-center justify-center">
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+                <div className="flex aspect-video items-center justify-center bg-checkerboard p-4">
                   <img
                     src={asset.src}
                     alt={asset.alt || "Design asset"}
@@ -1169,10 +1169,10 @@ export default function BrandKitPage() {
                     loading="lazy"
                   />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+                <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-3 py-2 text-[10px] text-[hsl(var(--muted-foreground))]">
                   <span className="font-mono uppercase">{asset.format}</span>
                   {asset.width && asset.height && (
-                    <span>{asset.width}&times;{asset.height}</span>
+                    <span className="tabular-nums">{asset.width}&times;{asset.height}</span>
                   )}
                 </div>
               </div>
