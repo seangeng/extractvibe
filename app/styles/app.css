@@ -30,6 +30,19 @@
     --input: 0 0% 90%;
     --ring: 24 95% 46%;
     --radius: 0.75rem;
+
+    /* bklit chart theme */
+    --chart-background: hsl(0 0% 100%);
+    --chart-foreground: hsl(0 0% 4%);
+    --chart-foreground-muted: hsl(0 0% 45%);
+    --chart-label: hsl(0 0% 45%);
+    --chart-grid: hsl(0 0% 90%);
+    --chart-ring-background: hsl(0 0% 93%);
+    --chart-1: hsl(220 70% 50%);
+    --chart-2: hsl(160 60% 45%);
+    --chart-3: hsl(30 80% 55%);
+    --chart-4: hsl(280 65% 60%);
+    --chart-5: hsl(340 75% 55%);
   }
 
   .dark {

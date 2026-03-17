@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { Globe, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -68,70 +69,44 @@ function getAllColors(mode?: ColorMode): { key: string; color: ColorValue }[] {
     .map(([key, v]) => ({ key, color: v as ColorValue }));
 }
 
-// ─── Color Ring Chart ───────────────────────────────────────────────────
+// ─── Lazy bklit chart imports (client-only, SSR-safe) ──────────────────
 
-function ColorRing({ colors }: { colors: { key: string; color: ColorValue }[] }) {
-  const size = 160;
-  const strokeWidth = 20;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const center = size / 2;
+import { lazy, Suspense } from "react";
 
-  // Filter out duplicate hex values and white/near-white backgrounds
+const LazyColorDonut = lazy(() => import("~/components/charts/color-donut"));
+const LazyPersonalityRadar = lazy(() => import("~/components/charts/personality-radar"));
+
+function ColorDonut({ colors }: { colors: { key: string; color: ColorValue }[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-[180px] w-[180px]" />;
+
   const unique = colors.filter((c, i, arr) => {
     if (!c.color.hex) return false;
     return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
   });
-
-  const count = unique.length;
-  if (count === 0) return null;
-
-  const sliceAngle = 360 / count;
-  const gapDegrees = 3;
+  if (unique.length === 0) return null;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block">
-      {unique.map((item, i) => {
-        const startAngle = i * sliceAngle + gapDegrees / 2;
-        const endAngle = (i + 1) * sliceAngle - gapDegrees / 2;
-        const startRad = ((startAngle - 90) * Math.PI) / 180;
-        const endRad = ((endAngle - 90) * Math.PI) / 180;
-        const x1 = center + radius * Math.cos(startRad);
-        const y1 = center + radius * Math.sin(startRad);
-        const x2 = center + radius * Math.cos(endRad);
-        const y2 = center + radius * Math.sin(endRad);
-        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    <Suspense fallback={<div className="h-[180px] w-[180px]" />}>
+      <div className="h-[180px] w-[180px]">
+        <LazyColorDonut colors={unique} />
+      </div>
+    </Suspense>
+  );
+}
 
-        return (
-          <path
-            key={item.key}
-            d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`}
-            fill="none"
-            stroke={item.color.hex}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-          />
-        );
-      })}
-      <text
-        x={center}
-        y={center - 6}
-        textAnchor="middle"
-        className="fill-[hsl(var(--foreground))] text-2xl font-bold"
-        style={{ fontSize: "28px", fontWeight: 700 }}
-      >
-        {count}
-      </text>
-      <text
-        x={center}
-        y={center + 14}
-        textAnchor="middle"
-        className="fill-[hsl(var(--muted-foreground))]"
-        style={{ fontSize: "11px" }}
-      >
-        colors
-      </text>
-    </svg>
+function PersonalityRadar({ spectrum }: { spectrum: ToneSpectrum }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-[280px] w-[280px]" />;
+
+  return (
+    <Suspense fallback={<div className="h-[280px] w-[280px]" />}>
+      <div className="h-[280px] w-[280px]">
+        <LazyPersonalityRadar spectrum={spectrum} />
+      </div>
+    </Suspense>
   );
 }
 
@@ -461,7 +436,7 @@ export default function PublicBrandPage({
               {/* Ring chart */}
               {allDisplayColors.length >= 3 && (
                 <div className="flex-shrink-0 self-center md:self-start">
-                  <ColorRing colors={allDisplayColors} />
+                  <ColorDonut colors={allDisplayColors} />
                 </div>
               )}
 
@@ -673,37 +648,45 @@ export default function PublicBrandPage({
             <section className="animate-fade-up animation-delay-300 space-y-5">
               <SectionLabel number="06" label="Voice & Tone" title="Personality" />
 
-              <div className="space-y-5">
-                <ToneBar
-                  label="Formality"
-                  leftLabel="Formal"
-                  rightLabel="Casual"
-                  value={toneSpectrum.formalCasual}
-                />
-                <ToneBar
-                  label="Mood"
-                  leftLabel="Playful"
-                  rightLabel="Serious"
-                  value={toneSpectrum.playfulSerious}
-                />
-                <ToneBar
-                  label="Energy"
-                  leftLabel="Enthusiastic"
-                  rightLabel="Matter-of-Fact"
-                  value={toneSpectrum.enthusiasticMatterOfFact}
-                />
-                <ToneBar
-                  label="Attitude"
-                  leftLabel="Respectful"
-                  rightLabel="Irreverent"
-                  value={toneSpectrum.respectfulIrreverent}
-                />
-                <ToneBar
-                  label="Complexity"
-                  leftLabel="Technical"
-                  rightLabel="Accessible"
-                  value={toneSpectrum.technicalAccessible}
-                />
+              <div className="space-y-8">
+                {/* Radar chart — centered */}
+                <div className="flex justify-center">
+                  <PersonalityRadar spectrum={toneSpectrum} />
+                </div>
+
+                {/* Tone bars as detail breakdown */}
+                <div className="space-y-4">
+                  <ToneBar
+                    label="Formality"
+                    leftLabel="Formal"
+                    rightLabel="Casual"
+                    value={toneSpectrum.formalCasual}
+                  />
+                  <ToneBar
+                    label="Mood"
+                    leftLabel="Playful"
+                    rightLabel="Serious"
+                    value={toneSpectrum.playfulSerious}
+                  />
+                  <ToneBar
+                    label="Energy"
+                    leftLabel="Enthusiastic"
+                    rightLabel="Matter-of-Fact"
+                    value={toneSpectrum.enthusiasticMatterOfFact}
+                  />
+                  <ToneBar
+                    label="Attitude"
+                    leftLabel="Respectful"
+                    rightLabel="Irreverent"
+                    value={toneSpectrum.respectfulIrreverent}
+                  />
+                  <ToneBar
+                    label="Complexity"
+                    leftLabel="Technical"
+                    rightLabel="Accessible"
+                    value={toneSpectrum.technicalAccessible}
+                  />
+                </div>
               </div>
             </section>
           )}
