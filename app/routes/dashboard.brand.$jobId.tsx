@@ -28,6 +28,11 @@ import type {
   ToneSpectrum,
   TypeScaleEntry,
   FontFamily,
+  ButtonStyle,
+  BrandButtons,
+  ShadowValue,
+  GradientValue,
+  BrandEffects,
 } from "../../server/schema/v1";
 
 export function meta() {
@@ -513,7 +518,7 @@ export default function BrandKitPage() {
 
   // ─── Destructure ───────────────────────────────────────────────────────
 
-  const { meta, identity, logos, colors, typography, voice, rules, vibe, officialGuidelines } = data;
+  const { meta, identity, logos, colors, typography, voice, rules, vibe, officialGuidelines, buttons, effects, ogImage } = data;
   const brandName = cleanBrandName(identity?.brandName);
   const domain = meta?.domain || "";
 
@@ -723,6 +728,12 @@ export default function BrandKitPage() {
                   </Badge>
                 ))}
               </div>
+            </div>
+          )}
+          {/* OG Image */}
+          {ogImage && (
+            <div className="mt-6 overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+              <img src={ogImage} alt={`${domain} preview`} className="w-full" loading="lazy" />
             </div>
           )}
         </section>
@@ -1026,10 +1037,115 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 06. Voice & Personality ──────────────────────────────────────── */}
+      {/* ─── 06. Buttons ──────────────────────────────────────────────────── */}
+      {buttons?.styles && buttons.styles.length > 0 && (
+        <section className="space-y-5">
+          <SectionLabel number="06" label="Buttons" title="Button Styles" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {buttons.styles.map((btn: ButtonStyle, i: number) => (
+              <div key={i} className="space-y-3 rounded-xl border border-[hsl(var(--border))] p-5">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="text-xs capitalize">{btn.variant}</Badge>
+                  {btn.sampleText && (
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[150px]">
+                      &ldquo;{btn.sampleText}&rdquo;
+                    </span>
+                  )}
+                </div>
+                {/* Live preview button */}
+                <div className="flex items-center justify-center py-4">
+                  <span
+                    className="inline-flex items-center justify-center text-sm"
+                    style={{
+                      backgroundColor: btn.backgroundColor || 'transparent',
+                      color: btn.textColor || 'inherit',
+                      borderRadius: btn.borderRadius || '4px',
+                      borderWidth: btn.borderWidth || (btn.borderColor ? '1px' : '0'),
+                      borderStyle: btn.borderWidth ? 'solid' : (btn.borderColor ? 'solid' : 'none'),
+                      borderColor: btn.borderColor || 'transparent',
+                      padding: btn.padding || '10px 20px',
+                      fontSize: btn.fontSize || '14px',
+                      fontWeight: btn.fontWeight || 400,
+                      boxShadow: btn.boxShadow || 'none',
+                    }}
+                  >
+                    {btn.sampleText || btn.variant}
+                  </span>
+                </div>
+                {/* Properties */}
+                <div className="space-y-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                  {btn.backgroundColor && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.backgroundColor }} />
+                      <span className="font-mono">{btn.backgroundColor}</span>
+                      <span className="text-[10px]">background</span>
+                    </div>
+                  )}
+                  {btn.textColor && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.textColor }} />
+                      <span className="font-mono">{btn.textColor}</span>
+                      <span className="text-[10px]">text</span>
+                    </div>
+                  )}
+                  {btn.borderRadius && <div>Radius: <span className="font-mono">{btn.borderRadius}</span></div>}
+                  {btn.padding && <div>Padding: <span className="font-mono">{btn.padding}</span></div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ─── 07. Effects ──────────────────────────────────────────────────── */}
+      {((effects?.shadows?.length || 0) > 0 || (effects?.gradients?.length || 0) > 0) && (
+        <section className="space-y-5">
+          <SectionLabel number="07" label="Effects" title="Shadows & Gradients" />
+
+          {/* Shadows */}
+          {effects?.shadows && effects.shadows.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Box Shadows</h4>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {effects.shadows.map((shadow: ShadowValue, i: number) => (
+                  <div key={i} className="space-y-2">
+                    <div
+                      className="flex h-20 items-center justify-center rounded-xl bg-white"
+                      style={{ boxShadow: shadow.value }}
+                    >
+                      <Badge variant="outline" className="text-[10px] capitalize">{shadow.context}</Badge>
+                    </div>
+                    <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{shadow.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Gradients */}
+          {effects?.gradients && effects.gradients.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Gradients</h4>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {effects.gradients.slice(0, 4).map((gradient: GradientValue, i: number) => (
+                  <div key={i} className="space-y-2">
+                    <div
+                      className="h-16 w-full rounded-xl border border-[hsl(var(--border))]"
+                      style={{ backgroundImage: gradient.value }}
+                    />
+                    <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{gradient.value.slice(0, 80)}...</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ─── 08. Voice & Personality ──────────────────────────────────────── */}
       {voice && (voice.toneSpectrum || voice.copywritingStyle || voice.contentPatterns || (voice.sampleCopy && voice.sampleCopy.length > 0)) && (
         <section className="space-y-5">
-          <SectionLabel number="06" label="Voice & Tone" title="Personality" />
+          <SectionLabel number="08" label="Voice & Tone" title="Personality" />
 
           {/* Tone spectrum */}
           {voice.toneSpectrum && (() => {
@@ -1185,10 +1301,10 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 07. Brand Rules ──────────────────────────────────────────────── */}
+      {/* ─── 09. Brand Rules ──────────────────────────────────────────────── */}
       {rules && ((rules.dos && rules.dos.length > 0) || (rules.donts && rules.donts.length > 0)) && (
         <section className="space-y-5">
-          <SectionLabel number="07" label="Brand Rules" title="Dos & Don&apos;ts" />
+          <SectionLabel number="09" label="Brand Rules" title="Dos & Don&apos;ts" />
 
           {rules.source && (
             <Badge variant="outline" className="text-[10px] capitalize">
@@ -1241,10 +1357,10 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 08. Official Guidelines ──────────────────────────────────────── */}
+      {/* ─── 10. Official Guidelines ──────────────────────────────────────── */}
       {officialGuidelines && officialGuidelines.hasOfficialKit && (
         <section className="space-y-5">
-          <SectionLabel number="08" label="Guidelines" title="Official Brand Guidelines" />
+          <SectionLabel number="10" label="Guidelines" title="Official Brand Guidelines" />
 
           {officialGuidelines.discoveredUrl && (
             <a

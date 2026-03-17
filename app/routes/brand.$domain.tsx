@@ -12,6 +12,11 @@ import type {
   FontFamily,
   TypeScale,
   TypeScaleEntry,
+  ButtonStyle,
+  BrandButtons,
+  ShadowValue,
+  GradientValue,
+  BrandEffects,
 } from "../../server/schema/v1";
 
 // ─── SSR Loader ──────────────────────────────────────────────────────────
@@ -360,6 +365,12 @@ export default function PublicBrandPage({
               </div>
             </div>
           )}
+          {/* OG Image */}
+          {kit.ogImage && (
+            <div className="mt-6 overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+              <img src={kit.ogImage} alt={`${domain} preview`} className="w-full" loading="lazy" />
+            </div>
+          )}
         </section>
 
         {/* ─── 02. Color Palette ─────────────────────────────────────────── */}
@@ -431,7 +442,112 @@ export default function PublicBrandPage({
             </section>
           )}
 
-        {/* ─── 04. Voice Tone Spectrum ───────────────────────────────────── */}
+        {/* ─── 03. Buttons ─────────────────────────────────────────────── */}
+        {kit.buttons?.styles && kit.buttons.styles.length > 0 && (
+          <section className="animate-fade-up space-y-6 animation-delay-200">
+            <SectionLabel number="03" label="Buttons" title="Button Styles" />
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {kit.buttons.styles.map((btn: ButtonStyle, i: number) => (
+                <div key={i} className="space-y-3 rounded-xl border border-[hsl(var(--border))] p-5">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-xs capitalize">{btn.variant}</Badge>
+                    {btn.sampleText && (
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[150px]">
+                        &ldquo;{btn.sampleText}&rdquo;
+                      </span>
+                    )}
+                  </div>
+                  {/* Live preview button */}
+                  <div className="flex items-center justify-center py-4">
+                    <span
+                      className="inline-flex items-center justify-center text-sm"
+                      style={{
+                        backgroundColor: btn.backgroundColor || 'transparent',
+                        color: btn.textColor || 'inherit',
+                        borderRadius: btn.borderRadius || '4px',
+                        borderWidth: btn.borderWidth || (btn.borderColor ? '1px' : '0'),
+                        borderStyle: btn.borderWidth ? 'solid' : (btn.borderColor ? 'solid' : 'none'),
+                        borderColor: btn.borderColor || 'transparent',
+                        padding: btn.padding || '10px 20px',
+                        fontSize: btn.fontSize || '14px',
+                        fontWeight: btn.fontWeight || 400,
+                        boxShadow: btn.boxShadow || 'none',
+                      }}
+                    >
+                      {btn.sampleText || btn.variant}
+                    </span>
+                  </div>
+                  {/* Properties */}
+                  <div className="space-y-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                    {btn.backgroundColor && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.backgroundColor }} />
+                        <span className="font-mono">{btn.backgroundColor}</span>
+                        <span className="text-[10px]">background</span>
+                      </div>
+                    )}
+                    {btn.textColor && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.textColor }} />
+                        <span className="font-mono">{btn.textColor}</span>
+                        <span className="text-[10px]">text</span>
+                      </div>
+                    )}
+                    {btn.borderRadius && <div>Radius: <span className="font-mono">{btn.borderRadius}</span></div>}
+                    {btn.padding && <div>Padding: <span className="font-mono">{btn.padding}</span></div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── 04. Effects ─────────────────────────────────────────────── */}
+        {((kit.effects?.shadows?.length || 0) > 0 || (kit.effects?.gradients?.length || 0) > 0) && (
+          <section className="animate-fade-up space-y-6 animation-delay-200">
+            <SectionLabel number="04" label="Effects" title="Shadows & Gradients" />
+
+            {/* Shadows */}
+            {kit.effects?.shadows && kit.effects.shadows.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Box Shadows</h4>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {kit.effects.shadows.map((shadow: ShadowValue, i: number) => (
+                    <div key={i} className="space-y-2">
+                      <div
+                        className="flex h-20 items-center justify-center rounded-xl bg-white"
+                        style={{ boxShadow: shadow.value }}
+                      >
+                        <Badge variant="outline" className="text-[10px] capitalize">{shadow.context}</Badge>
+                      </div>
+                      <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{shadow.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Gradients */}
+            {kit.effects?.gradients && kit.effects.gradients.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Gradients</h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {kit.effects.gradients.slice(0, 4).map((gradient: GradientValue, i: number) => (
+                    <div key={i} className="space-y-2">
+                      <div
+                        className="h-16 w-full rounded-xl border border-[hsl(var(--border))]"
+                        style={{ backgroundImage: gradient.value }}
+                      />
+                      <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{gradient.value.slice(0, 80)}...</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ─── 05. Voice Tone Spectrum ───────────────────────────────────── */}
         {toneSpectrum &&
           (toneSpectrum.formalCasual !== undefined ||
             toneSpectrum.playfulSerious !== undefined ||
@@ -439,7 +555,7 @@ export default function PublicBrandPage({
             toneSpectrum.respectfulIrreverent !== undefined ||
             toneSpectrum.technicalAccessible !== undefined) && (
             <section className="animate-fade-up animation-delay-300 space-y-5">
-              <SectionLabel number="03" label="Voice & Tone" title="Personality" />
+              <SectionLabel number="05" label="Voice & Tone" title="Personality" />
 
               <div className="space-y-5">
                 <ToneBar
@@ -476,12 +592,12 @@ export default function PublicBrandPage({
             </section>
           )}
 
-        {/* ─── 05. Brand Rules ───────────────────────────────────────────── */}
+        {/* ─── 06. Brand Rules ───────────────────────────────────────────── */}
         {rules &&
           ((rules.dos && rules.dos.length > 0) ||
             (rules.donts && rules.donts.length > 0)) && (
             <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="04" label="Brand Rules" title="Dos & Don&apos;ts" />
+              <SectionLabel number="06" label="Brand Rules" title="Dos & Don&apos;ts" />
 
               <div className="grid gap-6 sm:grid-cols-2">
                 {/* DOs */}
@@ -528,14 +644,14 @@ export default function PublicBrandPage({
             </section>
           )}
 
-        {/* ─── 06. Vibe Details ──────────────────────────────────────────── */}
+        {/* ─── 07. Vibe Details ──────────────────────────────────────────── */}
         {vibe &&
           ((vibe.visualEnergy !== undefined && vibe.visualEnergy !== null) ||
             vibe.designEra ||
             vibe.emotionalTone ||
             vibe.targetAudienceInferred) && (
             <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="05" label="Brand Vibe" title="Details" />
+              <SectionLabel number="07" label="Brand Vibe" title="Details" />
 
               {/* Info row */}
               <div className="flex flex-wrap gap-x-6 gap-y-3">
