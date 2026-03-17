@@ -440,6 +440,12 @@ function extractStyles(): StylesExtractionResult {
     { selector: "p", tag: "p" },
     { selector: "code", tag: "code" },
     { selector: "pre", tag: "pre" },
+    // CTA-specific selectors to catch colored buttons
+    { selector: "a[class*='primary']", tag: "a" },
+    { selector: "a[class*='cta']", tag: "a" },
+    { selector: "a[class*='btn']", tag: "a" },
+    { selector: "button[class*='primary']", tag: "button" },
+    { selector: "[class*='cta']", tag: "div" },
   ];
 
   // ---- Per-element computed styles ----
@@ -465,6 +471,50 @@ function extractStyles(): StylesExtractionResult {
     }
 
     elementStyles.push({ selector, tag, styles });
+  }
+
+  // ---- Sample buttons/links with non-transparent backgrounds ----
+
+  const btns = document.querySelectorAll("a, button");
+  let btnCount = 0;
+  for (let i = 0; i < btns.length && btnCount < 10; i++) {
+    const computed = getComputedStyle(btns[i]);
+    const bg = computed.backgroundColor;
+    if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+      elementStyles.push({
+        selector: `button-sample-${btnCount}`,
+        tag: btns[i].tagName.toLowerCase(),
+        styles: {
+          "background-color": bg,
+          "color": computed.color,
+          "font-family": computed.fontFamily,
+          "font-size": computed.fontSize,
+          "font-weight": computed.fontWeight,
+          "border-radius": computed.borderRadius,
+        },
+      });
+      btnCount++;
+    }
+  }
+
+  // ---- Sample hero/main section backgrounds ----
+
+  const sections = document.querySelectorAll('main, section, [class*="hero"], [class*="Hero"]');
+  let secCount = 0;
+  for (let i = 0; i < sections.length && secCount < 5; i++) {
+    const computed = getComputedStyle(sections[i]);
+    const bg = computed.backgroundColor;
+    if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+      elementStyles.push({
+        selector: `section-sample-${secCount}`,
+        tag: sections[i].tagName.toLowerCase(),
+        styles: {
+          "background-color": bg,
+          "color": computed.color,
+        },
+      });
+      secCount++;
+    }
   }
 
   // ---- CSS custom properties from :root ----

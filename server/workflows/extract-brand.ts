@@ -75,8 +75,57 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
         const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as any;
         if (!fetchData) throw new Error("Fetch result not found in KV");
 
+        // Transform fetchAndRender output → parseVisualIdentity input
+        // fetch-render.ts produces: elementStyles, cssCustomProperties (object), inlineSvgs[].svg, headings[].tag
+        // parse-visual.ts expects: computedStyles, cssCustomProperties (array), inlineSvgs[].content, headings[].level
+        const adapted = {
+          url: fetchData.meta?.["og:url"] || url,
+          domain,
+          title: fetchData.title,
+          metaDescription: fetchData.description || fetchData.meta?.description,
+          metaThemeColor: fetchData.meta?.["theme-color"] || fetchData.manifestData?.theme_color,
+          manifestThemeColor: fetchData.manifestData?.theme_color,
+          manifestBackgroundColor: fetchData.manifestData?.background_color,
+          icons: fetchData.icons || [],
+          logoImages: (fetchData.logoImages || []).map((img: any) => ({
+            src: img.src,
+            alt: img.alt,
+            context: img.context,
+            width: img.width,
+            height: img.height,
+          })),
+          inlineSvgs: (fetchData.inlineSvgs || []).map((s: any) => ({
+            content: s.svg || s.content,
+            context: s.context,
+            purpose: s.purpose,
+          })),
+          computedStyles: (fetchData.elementStyles || []).map((e: any) => ({
+            selector: e.selector || e.tag,
+            styles: e.styles,
+          })),
+          cssCustomProperties:
+            typeof fetchData.cssCustomProperties === "object" &&
+            !Array.isArray(fetchData.cssCustomProperties)
+              ? Object.entries(fetchData.cssCustomProperties).map(
+                  ([name, value]) => ({
+                    name,
+                    value: String(value),
+                    context: ":root",
+                  })
+                )
+              : fetchData.cssCustomProperties || [],
+          stylesheetUrls: fetchData.stylesheetUrls || [],
+          headings: (fetchData.headings || []).map((h: any) => ({
+            level:
+              typeof h.level === "number"
+                ? h.level
+                : parseInt(h.tag?.replace("h", "") || "1", 10),
+            text: h.text,
+          })),
+        };
+
         const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
-        const result = await parseVisualIdentity(fetchData, this.env, domain);
+        const result = await parseVisualIdentity(adapted, this.env, domain);
 
         // Store visual result in KV
         await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {

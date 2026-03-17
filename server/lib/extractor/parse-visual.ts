@@ -266,13 +266,20 @@ export function parseColor(
 
   // rgb() or rgba()
   const rgbMatch = trimmed.match(
-    /rgba?\(\s*(\d+(?:\.\d+)?)\s*[,\s]\s*(\d+(?:\.\d+)?)\s*[,\s]\s*(\d+(?:\.\d+)?)/
+    /rgba?\(\s*(\d+(?:\.\d+)?)\s*[,\s]\s*(\d+(?:\.\d+)?)\s*[,\s]\s*(\d+(?:\.\d+)?)(?:\s*[,/]\s*(\d+(?:\.\d+)?))?/
   );
   if (rgbMatch) {
     const r = Math.round(parseFloat(rgbMatch[1]));
     const g = Math.round(parseFloat(rgbMatch[2]));
     const b = Math.round(parseFloat(rgbMatch[3]));
     if (r > 255 || g > 255 || b > 255) return null;
+    // Skip fully transparent colors (alpha === 0)
+    if (rgbMatch[4] !== undefined) {
+      const alpha = parseFloat(rgbMatch[4]);
+      if (alpha === 0) return null;
+      // Also skip nearly transparent (alpha < 0.1)
+      if (alpha < 0.1) return null;
+    }
     const rgb: RGB = { r, g, b };
     return { hex: rgbToHex(r, g, b), rgb };
   }
@@ -892,6 +899,10 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
 
   // --- Computed Styles on Key Elements ---
   const elementRoleMap: Record<string, { property: string; role: string }[]> = {
+    html: [
+      { property: "background-color", role: "background" },
+      { property: "backgroundColor", role: "background" },
+    ],
     body: [
       { property: "background-color", role: "background" },
       { property: "backgroundColor", role: "background" },
@@ -899,6 +910,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     ],
     h1: [{ property: "color", role: "heading" }],
     h2: [{ property: "color", role: "heading" }],
+    h3: [{ property: "color", role: "heading" }],
     a: [{ property: "color", role: "link" }],
     button: [
       { property: "background-color", role: "primary" },
@@ -917,6 +929,55 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
 
   for (const entry of fetchOutput.computedStyles) {
     const selector = entry.selector.toLowerCase().replace(/[.#\[\]>+~: ]/g, "");
+
+    // Handle sampled buttons/links — map to "primary" role
+    if (selector.startsWith("button-sample")) {
+      for (const prop of ["background-color", "backgroundColor"]) {
+        const value = entry.styles[prop];
+        if (!value) continue;
+        const parsed = parseColor(value);
+        if (!parsed) continue;
+        collectedColors.push({
+          hex: parsed.hex,
+          rgb: parsed.rgb,
+          role: "primary",
+          source: `computed: ${entry.selector} ${prop}`,
+          confidence: 0.8,
+          mode: "light",
+        });
+        rawPaletteMap.set(parsed.hex, {
+          hex: parsed.hex,
+          rgb: parsed.rgb,
+          source: `computed: ${entry.selector}`,
+        });
+      }
+      continue;
+    }
+
+    // Handle sampled sections — map bg to "surface"
+    if (selector.startsWith("section-sample")) {
+      for (const prop of ["background-color", "backgroundColor"]) {
+        const value = entry.styles[prop];
+        if (!value) continue;
+        const parsed = parseColor(value);
+        if (!parsed) continue;
+        collectedColors.push({
+          hex: parsed.hex,
+          rgb: parsed.rgb,
+          role: "surface",
+          source: `computed: ${entry.selector} ${prop}`,
+          confidence: 0.7,
+          mode: "light",
+        });
+        rawPaletteMap.set(parsed.hex, {
+          hex: parsed.hex,
+          rgb: parsed.rgb,
+          source: `computed: ${entry.selector}`,
+        });
+      }
+      continue;
+    }
+
     const mappings = elementRoleMap[selector];
     if (!mappings) continue;
 
@@ -1130,6 +1191,8 @@ function selectorToFontRole(selector: string): FontRole | null {
     return "mono";
   if (lower.includes("hero") || lower.includes("display")) return "display";
   if (lower === "button" || lower === "a" || lower === "nav") return "body";
+  if (lower.startsWith("button-sample") || lower.includes("btn") || lower.includes("cta")) return "body";
+  if (lower.startsWith("section-sample")) return "body";
   return null;
 }
 
