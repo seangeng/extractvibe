@@ -53,6 +53,17 @@ export interface FetchRenderOutput {
   manifestUrl: string | null;
   manifestData: Record<string, any> | null;
 
+  // Design assets
+  designAssets: Array<{
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    format: string;
+    context: string;
+    isDesignAsset: boolean;
+  }>;
+
   // Screenshot
   screenshot: Uint8Array | null;
 
@@ -95,6 +106,16 @@ interface DomExtractionResult {
   ogImage: string | null;
   stylesheetUrls: string[];
   manifestUrl: string | null;
+
+  designAssets: Array<{
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    format: string;
+    context: string;
+    isDesignAsset: boolean;
+  }>;
 
   html: string;
 }
@@ -370,6 +391,72 @@ function extractDom(): DomExtractionResult {
     });
   }
 
+  // ---- Design assets (transparent PNGs, SVGs, interesting images) ----
+
+  const designAssets: Array<{
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    format: string;
+    context: string;
+    isDesignAsset: boolean;
+  }> = [];
+  const seenAssetSrcs = new Set<string>();
+  const allImgs = document.querySelectorAll("img");
+
+  for (let i = 0; i < Math.min(allImgs.length, 80); i++) {
+    const img = allImgs[i] as HTMLImageElement;
+    const src = img.src || img.getAttribute("src") || "";
+    if (!src || seenAssetSrcs.has(src)) continue;
+    if (src.startsWith("data:")) continue;
+
+    const width = img.naturalWidth || img.width || 0;
+    const height = img.naturalHeight || img.height || 0;
+
+    // Skip tiny icons (< 40px) and tracking pixels
+    if (width < 40 || height < 40) continue;
+
+    const isPNG = src.toLowerCase().includes(".png");
+    const isSVG = src.toLowerCase().includes(".svg");
+    const isWebP = src.toLowerCase().includes(".webp");
+    const isJPG =
+      src.toLowerCase().includes(".jpg") ||
+      src.toLowerCase().includes(".jpeg");
+
+    // Determine if it's likely a design asset vs a photo
+    const alt = img.alt || "";
+    const isLikelyDesignAsset =
+      isPNG ||
+      isSVG ||
+      isWebP ||
+      alt.toLowerCase().includes("logo") ||
+      alt.toLowerCase().includes("icon") ||
+      alt.toLowerCase().includes("illustration") ||
+      img.closest('[class*="hero"]') !== null ||
+      img.closest('[class*="feature"]') !== null ||
+      img.closest('[class*="bento"]') !== null;
+
+    seenAssetSrcs.add(src);
+    designAssets.push({
+      src: src,
+      alt: alt.substring(0, 100),
+      width: width,
+      height: height,
+      format: isPNG
+        ? "png"
+        : isSVG
+          ? "svg"
+          : isWebP
+            ? "webp"
+            : isJPG
+              ? "jpg"
+              : "other",
+      context: closestContext(img),
+      isDesignAsset: isLikelyDesignAsset,
+    });
+  }
+
   // ---- Raw HTML ----
 
   const html = document.documentElement.outerHTML;
@@ -391,6 +478,7 @@ function extractDom(): DomExtractionResult {
     ogImage,
     stylesheetUrls,
     manifestUrl,
+    designAssets,
     html,
   };
 }
@@ -769,6 +857,7 @@ export async function fetchAndRender(
     stylesheetUrls: [],
     manifestUrl: null,
     manifestData: null,
+    designAssets: [],
     screenshot: null,
     html: "",
   };
@@ -812,6 +901,7 @@ export async function fetchAndRender(
         ogImage: null,
         stylesheetUrls: [],
         manifestUrl: null,
+        designAssets: [],
         html: "",
       };
     }
@@ -912,6 +1002,9 @@ export async function fetchAndRender(
       stylesheetUrls: domResult.stylesheetUrls,
       manifestUrl: domResult.manifestUrl,
       manifestData,
+
+      // Design assets
+      designAssets: domResult.designAssets || [],
 
       // Screenshot
       screenshot,

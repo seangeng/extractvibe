@@ -33,6 +33,7 @@ import type {
   ShadowValue,
   GradientValue,
   BrandEffects,
+  BrandDesignAsset,
 } from "../../server/schema/v1";
 
 export function meta() {
@@ -518,7 +519,7 @@ export default function BrandKitPage() {
 
   // ─── Destructure ───────────────────────────────────────────────────────
 
-  const { meta, identity, logos, colors, typography, voice, rules, vibe, officialGuidelines, buttons, effects, ogImage } = data;
+  const { meta, identity, logos, colors, typography, voice, rules, vibe, officialGuidelines, buttons, effects, designAssets, ogImage } = data;
   const brandName = cleanBrandName(identity?.brandName);
   const domain = meta?.domain || "";
 
@@ -538,6 +539,17 @@ export default function BrandKitPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
+            {/* Brand Logo */}
+            {logos && logos.length > 0 && logos[0].url && (
+              <div className="mb-2">
+                <img
+                  src={logos[0].url}
+                  alt={`${domain} logo`}
+                  className="h-10 w-auto"
+                  loading="lazy"
+                />
+              </div>
+            )}
             <h1 className="font-display text-2xl font-bold md:text-3xl">{brandName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[hsl(var(--muted-foreground))]">
               {domain && (
@@ -1142,10 +1154,37 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 08. Voice & Personality ──────────────────────────────────────── */}
+      {/* ─── 08. Design Assets ──────────────────────────────────────────── */}
+      {designAssets && designAssets.length > 0 && (
+        <section className="space-y-5">
+          <SectionLabel number="08" label="Design Assets" title="Visual Elements" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {designAssets.slice(0, 9).map((asset: BrandDesignAsset, i: number) => (
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4">
+                <div className="flex aspect-video items-center justify-center">
+                  <img
+                    src={asset.src}
+                    alt={asset.alt || "Design asset"}
+                    className="max-h-full max-w-full object-contain"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+                  <span className="font-mono uppercase">{asset.format}</span>
+                  {asset.width && asset.height && (
+                    <span>{asset.width}&times;{asset.height}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ─── 09. Voice & Personality ──────────────────────────────────────── */}
       {voice && (voice.toneSpectrum || voice.copywritingStyle || voice.contentPatterns || (voice.sampleCopy && voice.sampleCopy.length > 0)) && (
         <section className="space-y-5">
-          <SectionLabel number="08" label="Voice & Tone" title="Personality" />
+          <SectionLabel number="09" label="Voice & Tone" title="Personality" />
 
           {/* Tone spectrum */}
           {voice.toneSpectrum && (() => {
@@ -1301,10 +1340,10 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 09. Brand Rules ──────────────────────────────────────────────── */}
+      {/* ─── 10. Brand Rules ──────────────────────────────────────────────── */}
       {rules && ((rules.dos && rules.dos.length > 0) || (rules.donts && rules.donts.length > 0)) && (
         <section className="space-y-5">
-          <SectionLabel number="09" label="Brand Rules" title="Dos & Don&apos;ts" />
+          <SectionLabel number="10" label="Brand Rules" title="Dos & Don&apos;ts" />
 
           {rules.source && (
             <Badge variant="outline" className="text-[10px] capitalize">
@@ -1357,10 +1396,10 @@ export default function BrandKitPage() {
         </section>
       )}
 
-      {/* ─── 10. Official Guidelines ──────────────────────────────────────── */}
+      {/* ─── 11. Official Guidelines ──────────────────────────────────────── */}
       {officialGuidelines && officialGuidelines.hasOfficialKit && (
         <section className="space-y-5">
-          <SectionLabel number="10" label="Guidelines" title="Official Brand Guidelines" />
+          <SectionLabel number="11" label="Guidelines" title="Official Brand Guidelines" />
 
           {officialGuidelines.discoveredUrl && (
             <a

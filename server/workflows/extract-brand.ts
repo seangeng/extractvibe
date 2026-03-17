@@ -125,6 +125,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           shadows: fetchData.shadows || [],
           gradients: fetchData.gradients || [],
           ogImage: fetchData.ogImage || null,
+          designAssets: fetchData.designAssets || [],
         };
 
         const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
@@ -232,6 +233,23 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
         const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as any;
         const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as any;
 
+        // Fetch clean logo from LoadLogo API
+        let loadLogoData: { logo?: string; favicon?: string; name?: string } | null = null;
+        try {
+          const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
+            headers: { "Accept": "application/json" },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (llRes.ok) {
+            const llJson = await llRes.json() as any;
+            loadLogoData = {
+              logo: llJson.logo || null,
+              favicon: llJson.favicon || null,
+              name: llJson.name || null,
+            };
+          }
+        } catch { /* non-fatal */ }
+
         const kit = createEmptyBrandKit(url);
         kit.meta.durationMs = Date.now() - startTime;
         kit.meta.extractionDepth = 1;
@@ -246,6 +264,36 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           if (visualData.buttons) kit.buttons = visualData.buttons;
           if (visualData.effects) kit.effects = visualData.effects;
           if (visualData.ogImage) kit.ogImage = visualData.ogImage;
+        }
+
+        // Add LoadLogo data
+        if (loadLogoData?.logo) {
+          // Add as the first logo entry with highest confidence
+          kit.logos = [
+            {
+              type: "primary" as const,
+              url: loadLogoData.logo,
+              originalUrl: loadLogoData.logo,
+              format: "svg" as const,
+              confidence: 1.0,
+              source: "loadlogo" as const,
+            },
+            ...(kit.logos || []),
+          ];
+        }
+        // Use LoadLogo name if better than what we extracted
+        // Prefer short, clean names over long page titles with separators
+        if (loadLogoData?.name) {
+          const current = kit.identity?.brandName || "";
+          const isTitleLike = current.includes("|") || current.includes("—") || current.includes(" - ") || current.length > 60;
+          if (!current || isTitleLike) {
+            kit.identity = { ...kit.identity, brandName: loadLogoData.name };
+          }
+        }
+
+        // Add design assets (top 10 most interesting)
+        if (visualData?.designAssets) {
+          kit.designAssets = visualData.designAssets;
         }
 
         if (voiceData) {

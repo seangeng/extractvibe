@@ -17,6 +17,7 @@ import type {
   ShadowValue,
   GradientValue,
   BrandEffects,
+  BrandDesignAsset,
 } from "../../server/schema/v1";
 
 // ─── SSR Loader ──────────────────────────────────────────────────────────
@@ -312,6 +313,17 @@ export default function PublicBrandPage({
               {domain}
             </a>
           </div>
+          {/* Brand Logo */}
+          {kit.logos && kit.logos.length > 0 && kit.logos[0].url && (
+            <div className="mb-1">
+              <img
+                src={kit.logos[0].url}
+                alt={`${domain} logo`}
+                className="h-12 w-auto"
+                loading="lazy"
+              />
+            </div>
+          )}
           <h1 className="font-display text-3xl font-bold tracking-tight md:text-5xl">
             {brandName}
           </h1>
@@ -547,7 +559,34 @@ export default function PublicBrandPage({
           </section>
         )}
 
-        {/* ─── 05. Voice Tone Spectrum ───────────────────────────────────── */}
+        {/* ─── 05. Design Assets ──────────────────────────────────────────── */}
+        {kit.designAssets && kit.designAssets.length > 0 && (
+          <section className="animate-fade-up animation-delay-200 space-y-5">
+            <SectionLabel number="05" label="Design Assets" title="Visual Elements" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {kit.designAssets.slice(0, 9).map((asset: BrandDesignAsset, i: number) => (
+                <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4">
+                  <div className="flex aspect-video items-center justify-center">
+                    <img
+                      src={asset.src}
+                      alt={asset.alt || "Design asset"}
+                      className="max-h-full max-w-full object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+                    <span className="font-mono uppercase">{asset.format}</span>
+                    {asset.width && asset.height && (
+                      <span>{asset.width}&times;{asset.height}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── 06. Voice Tone Spectrum ───────────────────────────────────── */}
         {toneSpectrum &&
           (toneSpectrum.formalCasual !== undefined ||
             toneSpectrum.playfulSerious !== undefined ||
@@ -555,7 +594,7 @@ export default function PublicBrandPage({
             toneSpectrum.respectfulIrreverent !== undefined ||
             toneSpectrum.technicalAccessible !== undefined) && (
             <section className="animate-fade-up animation-delay-300 space-y-5">
-              <SectionLabel number="05" label="Voice & Tone" title="Personality" />
+              <SectionLabel number="06" label="Voice & Tone" title="Personality" />
 
               <div className="space-y-5">
                 <ToneBar
@@ -597,7 +636,7 @@ export default function PublicBrandPage({
           ((rules.dos && rules.dos.length > 0) ||
             (rules.donts && rules.donts.length > 0)) && (
             <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="06" label="Brand Rules" title="Dos & Don&apos;ts" />
+              <SectionLabel number="07" label="Brand Rules" title="Dos & Don&apos;ts" />
 
               <div className="grid gap-6 sm:grid-cols-2">
                 {/* DOs */}
@@ -651,7 +690,7 @@ export default function PublicBrandPage({
             vibe.emotionalTone ||
             vibe.targetAudienceInferred) && (
             <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="07" label="Brand Vibe" title="Details" />
+              <SectionLabel number="08" label="Brand Vibe" title="Details" />
 
               {/* Info row */}
               <div className="flex flex-wrap gap-x-6 gap-y-3">

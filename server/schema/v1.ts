@@ -109,6 +109,8 @@ export interface BrandLogo {
   dimensions?: Dimensions;
   /** Extraction confidence 0–1 */
   confidence?: number;
+  /** Where this logo was sourced from */
+  source?: "extracted" | "loadlogo" | "favicon";
 }
 
 // ─── Colors ──────────────────────────────────────────────────────────
@@ -281,6 +283,18 @@ export interface BrandAsset {
   dimensions?: Dimensions;
   /** Extraction confidence 0–1 */
   confidence?: number;
+}
+
+// ─── Design Assets ───────────────────────────────────────────────────
+
+/** A design asset (illustration, hero image, transparent PNG, etc.) found on the site. */
+export interface BrandDesignAsset {
+  src: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  format?: string;
+  context?: string;
 }
 
 // ─── Voice ───────────────────────────────────────────────────────────
@@ -457,6 +471,7 @@ export interface ExtractVibeBrandKit {
   officialGuidelines?: OfficialGuidelines;
   buttons?: BrandButtons;
   effects?: BrandEffects;
+  designAssets?: BrandDesignAsset[];
   ogImage?: string;
 }
 
@@ -538,6 +553,7 @@ export function createEmptyBrandKit(url: string): ExtractVibeBrandKit {
     },
     buttons: { styles: [] },
     effects: { shadows: [], gradients: [] },
+    designAssets: [],
     ogImage: undefined,
   };
 }

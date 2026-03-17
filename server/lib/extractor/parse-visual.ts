@@ -13,6 +13,7 @@ import type {
   BrandSpacing,
   BrandAsset,
   BrandIdentity,
+  BrandDesignAsset,
   ColorValue,
   ColorMode,
   SemanticColors,
@@ -107,6 +108,16 @@ export interface FetchRenderOutput {
   gradients?: Array<{ value: string; selector: string }>;
   /** Open Graph image URL */
   ogImage?: string | null;
+  /** Design assets extracted from DOM */
+  designAssets?: Array<{
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    format: string;
+    context: string;
+    isDesignAsset: boolean;
+  }>;
 }
 
 // ─── Output ──────────────────────────────────────────────────────────
@@ -120,6 +131,7 @@ export interface ParseVisualOutput {
   assets: BrandAsset[];
   buttons: BrandButtons;
   effects: BrandEffects;
+  designAssets: BrandDesignAsset[];
   ogImage?: string;
 }
 
@@ -1910,6 +1922,26 @@ export async function parseVisualIdentity(
 
   const identity = parseIdentity(fetchOutput);
 
+  // Filter and rank design assets — prioritize PNGs/SVGs, skip JPG photos
+  const rawDesignAssets = fetchOutput.designAssets || [];
+  const rankedDesignAssets: BrandDesignAsset[] = rawDesignAssets
+    .filter((a) => a.isDesignAsset || a.format === "svg" || a.format === "png")
+    .sort((a, b) => {
+      // SVGs first, then PNGs, then others
+      const formatScore = (f: string) =>
+        f === "svg" ? 3 : f === "png" ? 2 : f === "webp" ? 1 : 0;
+      return formatScore(b.format) - formatScore(a.format);
+    })
+    .slice(0, 10)
+    .map((a) => ({
+      src: a.src,
+      alt: a.alt || undefined,
+      width: a.width || undefined,
+      height: a.height || undefined,
+      format: a.format || undefined,
+      context: a.context || undefined,
+    }));
+
   return {
     identity,
     logos: logoResult.logos,
@@ -1919,6 +1951,7 @@ export async function parseVisualIdentity(
     assets: logoResult.assets,
     buttons: parseButtons(fetchOutput),
     effects: parseEffects(fetchOutput),
+    designAssets: rankedDesignAssets,
     ogImage: fetchOutput.ogImage || undefined,
   };
 }
