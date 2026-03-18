@@ -69,7 +69,7 @@ function getAllColors(mode?: ColorMode): { key: string; color: ColorValue }[] {
     .map(([key, v]) => ({ key, color: v as ColorValue }));
 }
 
-// ─── Lazy bklit chart imports (client-only, SSR-safe) ──────────────────
+// ─── Lazy chart imports (client-only, SSR-safe) ──────────────────────────
 
 import { lazy, Suspense } from "react";
 
@@ -110,82 +110,7 @@ function PersonalityRadar({ spectrum }: { spectrum: ToneSpectrum }) {
   );
 }
 
-// ─── Numbered Section Label ─────────────────────────────────────────────
-
-function SectionLabel({
-  number,
-  label,
-  title,
-}: {
-  number: string;
-  label: string;
-  title: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-        {number} / {label}
-      </p>
-      <h2 className="mt-3 font-display text-2xl font-bold">{title}</h2>
-    </div>
-  );
-}
-
 // ─── Sub-components ──────────────────────────────────────────────────────
-
-function ColorSwatch({ color }: { color: ColorValue; label?: string }) {
-  const hex = color.hex || "#000000";
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className="h-16 w-16 rounded-xl border border-[hsl(var(--border))]"
-        style={{ backgroundColor: hex }}
-      />
-      <div className="text-center">
-        <p className="font-mono text-xs font-medium">{hex}</p>
-        {color.role && (
-          <p className="text-[10px] capitalize text-[hsl(var(--muted-foreground))]">
-            {color.role}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ToneBar({
-  label,
-  leftLabel,
-  rightLabel,
-  value,
-}: {
-  label: string;
-  leftLabel: string;
-  rightLabel: string;
-  value?: number;
-  accentColor?: string;
-}) {
-  if (value === undefined || value === null) return null;
-  const percentage = ((value - 1) / 9) * 100;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-        <span>{leftLabel}</span>
-        <span className="font-medium text-[hsl(var(--foreground))]">
-          {label}
-        </span>
-        <span>{rightLabel}</span>
-      </div>
-      <div className="relative h-1.5 w-full rounded-full bg-[hsl(var(--muted))]">
-        <div
-          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[hsl(var(--foreground))]"
-          style={{ left: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function buildFontStack(family: FontFamily): string {
   const parts = [JSON.stringify(family.name)];
@@ -194,6 +119,62 @@ function buildFontStack(family: FontFamily): string {
   }
   parts.push("system-ui", "sans-serif");
   return parts.join(", ");
+}
+
+function ColorBar({ color, label }: { color: ColorValue; label: string }) {
+  const hex = color.hex || "#000000";
+  return (
+    <div className="flex min-w-[60px] flex-1 flex-col">
+      <div
+        className="h-20 w-full first:rounded-l-lg last:rounded-r-lg"
+        style={{ backgroundColor: hex }}
+      />
+      <div className="mt-2 text-center">
+        <p className="font-mono text-[11px] font-medium">{hex}</p>
+        <p className="text-[10px] capitalize text-[hsl(var(--muted-foreground))]">
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ColorStrip({
+  colors,
+  label,
+}: {
+  colors: { key: string; color: ColorValue }[];
+  label?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {label && (
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+          {label}
+        </p>
+      )}
+      <div className="flex overflow-hidden rounded-lg">
+        {colors.map(({ key, color }) => (
+          <div key={key} className="min-w-[60px] flex-1">
+            <div
+              className="h-20 w-full"
+              style={{ backgroundColor: color.hex || "#000000" }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex">
+        {colors.map(({ key, color }) => (
+          <div key={key} className="min-w-[60px] flex-1 text-center">
+            <p className="font-mono text-[11px] font-medium">{color.hex}</p>
+            <p className="text-[10px] capitalize text-[hsl(var(--muted-foreground))]">
+              {color.role || key}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function FontFamilyCard({ family }: { family: FontFamily }) {
@@ -250,10 +231,9 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
     caption: "text-xs",
   };
 
-  // Build a lookup from font name → full CSS font stack
   const fontStackLookup = new Map<string, string>();
   for (const fam of families || []) {
-    fontStackLookup.set(fam.name, buildFontStack(fam));
+    fontStackLookup.set(fam.name || "", buildFontStack(fam));
   }
 
   function getFontStack(entry: TypeScaleEntry): string {
@@ -262,7 +242,6 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
       if (stack) return stack;
       return `${JSON.stringify(entry.fontFamily)}, system-ui, sans-serif`;
     }
-    // Default: use first family if available
     const first = families?.[0];
     return first ? buildFontStack(first) : "system-ui, sans-serif";
   }
@@ -274,38 +253,33 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
   if (entries.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-        Type Scale
-      </h4>
-      <div className="space-y-2">
-        {entries.map(([level, entry]) => (
-          <div
-            key={level}
-            className="flex items-center gap-4 rounded-xl border border-[hsl(var(--border))] px-4 py-3"
+    <div className="space-y-2">
+      {entries.map(([level, entry]) => (
+        <div
+          key={level}
+          className="flex items-center gap-4 rounded-xl border border-[hsl(var(--border))] px-4 py-3"
+        >
+          <Badge variant="outline" className="w-16 justify-center font-mono text-xs">
+            {level}
+          </Badge>
+          <p
+            className={cn(
+              sizeMap[level] || "text-base",
+              "flex-1 leading-tight"
+            )}
+            style={{
+              fontFamily: getFontStack(entry),
+              fontWeight: entry.fontWeight || undefined,
+              letterSpacing: entry.letterSpacing || undefined,
+            }}
           >
-            <Badge variant="outline" className="w-16 justify-center font-mono text-xs">
-              {level}
-            </Badge>
-            <p
-              className={cn(
-                sizeMap[level] || "text-base",
-                "flex-1 leading-tight"
-              )}
-              style={{
-                fontFamily: getFontStack(entry),
-                fontWeight: entry.fontWeight || undefined,
-                letterSpacing: entry.letterSpacing || undefined,
-              }}
-            >
-              The quick brown fox
-            </p>
-            <span className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">
-              {entry.fontSize}
-            </span>
-          </div>
-        ))}
-      </div>
+            The quick brown fox
+          </p>
+          <span className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">
+            {entry.fontSize}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -326,11 +300,24 @@ export default function PublicBrandPage({
 
   const toneSpectrum = voice?.toneSpectrum;
 
+  const hasButtons = kit.buttons?.styles && kit.buttons.styles.length > 0;
+  const hasShadows = (kit.effects?.shadows?.length || 0) > 0;
+  const hasGradients = (kit.effects?.gradients?.length || 0) > 0;
+  const hasDesignSystem = hasButtons || hasShadows || hasGradients;
+
+  const hasVibe =
+    vibe &&
+    ((vibe.visualEnergy !== undefined && vibe.visualEnergy !== null) ||
+      vibe.designEra ||
+      vibe.emotionalTone ||
+      vibe.targetAudienceInferred ||
+      (vibe.comparableBrands && vibe.comparableBrands.length > 0));
+
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
-      {/* ─── Header ───────────────────────────────────────────────────────── */}
+      {/* ─── Header ───────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2">
             <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-8 w-8" />
             <span className="text-lg font-bold">ExtractVibe</span>
@@ -341,475 +328,438 @@ export default function PublicBrandPage({
         </div>
       </nav>
 
-      <main className="mx-auto max-w-5xl space-y-12 px-6 py-10 md:py-16">
-        {/* ─── 01. Brand Header ──────────────────────────────────────────── */}
-        <section className="animate-fade-up space-y-4">
-          <div className="flex items-center gap-3 text-sm text-[hsl(var(--muted-foreground))]">
-            <Globe className="h-4 w-4" />
-            <a
-              href={`https://${domain}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-[hsl(var(--foreground))]"
-            >
-              {domain}
-            </a>
+      {/* ─── Hero Banner ──────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden">
+        {/* OG image as blurred background tint */}
+        {kit.ogImage && (
+          <div className="absolute inset-0 z-0">
+            <img
+              src={kit.ogImage}
+              alt=""
+              className="h-full w-full object-cover opacity-[0.07] blur-2xl"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-[hsl(var(--background))]/60 to-[hsl(var(--background))]" />
           </div>
-          {/* Brand Logo */}
+        )}
+
+        <div className="relative z-10 mx-auto max-w-4xl px-6 pb-16 pt-12 md:pb-20 md:pt-16">
+          {/* Logo on checkerboard */}
           {kit.logos && kit.logos.length > 0 && kit.logos[0].url && (
-            <div className="mb-3 inline-flex items-center justify-center rounded-xl bg-checkerboard p-4">
+            <div className="mb-6 inline-flex items-center justify-center rounded-lg bg-checkerboard p-3">
               <img
                 src={kit.logos[0].url}
                 alt={`${domain} logo`}
-                className="h-10 w-auto"
+                className="h-8 w-auto"
                 loading="lazy"
               />
             </div>
           )}
-          <h1 className="font-display text-3xl font-bold tracking-tight md:text-5xl">
+
+          <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
             {brandName}
           </h1>
+
+          <a
+            href={`https://${domain}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {domain}
+          </a>
+
+          {/* Vibe summary as pull quote */}
           {vibe?.summary && (
-            <p className="max-w-2xl text-lg italic leading-relaxed text-[hsl(var(--muted-foreground))]">
-              &ldquo;{vibe.summary}&rdquo;
-            </p>
+            <blockquote className="mt-8 max-w-prose border-l-2 border-[hsl(var(--foreground))] pl-5 text-lg italic leading-relaxed text-[hsl(var(--muted-foreground))] md:text-xl">
+              {vibe.summary}
+            </blockquote>
           )}
+
+          {/* Tags */}
           {vibe?.tags && vibe.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-6 flex flex-wrap gap-2">
               {vibe.tags.map((tag: string) => (
-                <Badge key={tag} variant="outline">
+                <Badge key={tag} variant="outline" className="font-normal">
                   {tag}
                 </Badge>
               ))}
             </div>
           )}
-          {/* Visual energy bar */}
-          {vibe?.visualEnergy !== undefined && vibe.visualEnergy !== null && (
-            <div className="max-w-md space-y-1.5">
-              <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-                <span>Visual Energy</span>
-                <span className="font-semibold tabular-nums text-[hsl(var(--foreground))]">
-                  {vibe.visualEnergy}/10
-                </span>
-              </div>
-              <div className="relative h-1.5 w-full rounded-full bg-[hsl(var(--muted))]">
-                <div
-                  className="h-full rounded-full bg-[hsl(var(--foreground))] transition-all duration-500"
-                  style={{ width: `${(vibe.visualEnergy / 10) * 100}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
-                <span>Calm & Understated</span>
-                <span>High-Energy & Bold</span>
-              </div>
-            </div>
-          )}
-          {/* Comparable brands */}
-          {vibe?.comparableBrands && vibe.comparableBrands.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                Comparable Brands
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {vibe.comparableBrands.map((brand: string) => (
-                  <span key={brand} className="text-sm text-[hsl(var(--muted-foreground))]">
-                    {brand}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* OG Image */}
-          {kit.ogImage && (
-            <div className="mt-6 overflow-hidden rounded-xl border border-[hsl(var(--border))]">
-              <img src={kit.ogImage} alt={`${domain} preview`} className="w-full" loading="lazy" />
-            </div>
-          )}
-        </section>
+        </div>
+      </section>
 
-        {/* ─── 02. Color Palette ─────────────────────────────────────────── */}
+      <main>
+        {/* ─── Color Palette ────────────────────────────────────────────── */}
         {allDisplayColors.length > 0 && (
-          <section className="animate-fade-up animation-delay-100 space-y-5">
-            <SectionLabel number="01" label="Color Palette" title="Colors" />
+          <>
+            <hr className="border-[hsl(var(--border))]" />
+            <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                Color Palette
+              </p>
+              <h2 className="mt-2 text-xl font-semibold">Colors</h2>
 
-            <div className="flex flex-col gap-8 md:flex-row md:items-start">
-              {/* Ring chart */}
-              {allDisplayColors.length >= 3 && (
-                <div className="flex-shrink-0 self-center md:self-start">
-                  <ColorDonut colors={allDisplayColors} />
+              <div className="mt-8 flex flex-col gap-10 md:flex-row md:items-start">
+                {/* Donut chart */}
+                {allDisplayColors.length >= 3 && (
+                  <div className="flex-shrink-0 self-center md:self-start">
+                    <ColorDonut colors={allDisplayColors} />
+                  </div>
+                )}
+
+                {/* Color strips */}
+                <div className="flex-1 space-y-8">
+                  {lightColors.length > 0 && (
+                    <ColorStrip
+                      colors={lightColors}
+                      label={darkColors.length > 0 ? "Light Mode" : undefined}
+                    />
+                  )}
+                  {darkColors.length > 0 && (
+                    <ColorStrip
+                      colors={darkColors}
+                      label={lightColors.length > 0 ? "Dark Mode" : undefined}
+                    />
+                  )}
                 </div>
-              )}
-
-              {/* Swatches */}
-              <div className="flex-1 space-y-6">
-                {lightColors.length > 0 && (
-                  <div className="space-y-3">
-                    {darkColors.length > 0 && (
-                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                        Light Mode
-                      </h4>
-                    )}
-                    <div className="flex flex-wrap gap-4">
-                      {lightColors.map(({ key, color }) => (
-                        <ColorSwatch
-                          key={key}
-                          color={{ ...color, role: color.role || key }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {darkColors.length > 0 && (
-                  <div className="space-y-3">
-                    {lightColors.length > 0 && (
-                      <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                        Dark Mode
-                      </h4>
-                    )}
-                    <div className="flex flex-wrap gap-4">
-                      {darkColors.map(({ key, color }) => (
-                        <ColorSwatch
-                          key={key}
-                          color={{ ...color, role: color.role || key }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          </section>
+            </section>
+          </>
         )}
 
-        {/* ─── 03. Typography ────────────────────────────────────────────── */}
+        {/* ─── Typography ───────────────────────────────────────────────── */}
         {typography &&
           ((typography.families && typography.families.length > 0) ||
             typography.scale) && (
-            <section className="animate-fade-up animation-delay-200 space-y-5">
-              <SectionLabel number="02" label="Typography" title="Fonts" />
+            <>
+              <hr className="border-[hsl(var(--border))]" />
+              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                  Typography
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">Fonts</h2>
 
-              {/* Font families */}
-              {typography.families && typography.families.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
-                    Font Families
-                  </h4>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {typography.families.map((family: FontFamily, idx: number) => (
-                      <FontFamilyCard key={family.name || idx} family={family} />
-                    ))}
-                  </div>
+                <div className="mt-8 grid gap-10 md:grid-cols-2">
+                  {/* Left: font families */}
+                  {typography.families && typography.families.length > 0 && (
+                    <div className="space-y-3">
+                      {typography.families.map((family: FontFamily, idx: number) => (
+                        <FontFamilyCard key={family.name || idx} family={family} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Right: type scale */}
+                  {typography.scale && (
+                    <div>
+                      <TypeScalePreview scale={typography.scale} families={typography.families} />
+                    </div>
+                  )}
                 </div>
-              )}
-              {/* Type scale preview */}
-              {typography.scale && <TypeScalePreview scale={typography.scale} families={typography.families} />}
-            </section>
+              </section>
+            </>
           )}
 
-        {/* ─── 03. Buttons ─────────────────────────────────────────────── */}
-        {kit.buttons?.styles && kit.buttons.styles.length > 0 && (
-          <section className="animate-fade-up space-y-6 animation-delay-200">
-            <SectionLabel number="03" label="Buttons" title="Button Styles" />
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {kit.buttons.styles.map((btn: ButtonStyle, i: number) => (
-                <div key={i} className="space-y-3 rounded-xl border border-[hsl(var(--border))] p-5">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs capitalize">{btn.variant}</Badge>
-                    {btn.sampleText && (
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[150px]">
-                        &ldquo;{btn.sampleText}&rdquo;
-                      </span>
-                    )}
-                  </div>
-                  {/* Live preview button */}
-                  <div className="flex items-center justify-center py-4">
-                    <span
-                      className="inline-flex items-center justify-center text-sm"
-                      style={{
-                        backgroundColor: btn.backgroundColor || 'transparent',
-                        color: btn.textColor || 'inherit',
-                        borderRadius: btn.borderRadius || '4px',
-                        borderWidth: btn.borderWidth || (btn.borderColor ? '1px' : '0'),
-                        borderStyle: btn.borderWidth ? 'solid' : (btn.borderColor ? 'solid' : 'none'),
-                        borderColor: btn.borderColor || 'transparent',
-                        padding: btn.padding || '10px 20px',
-                        fontSize: btn.fontSize || '14px',
-                        fontWeight: btn.fontWeight || 400,
-                        boxShadow: btn.boxShadow || 'none',
-                      }}
-                    >
-                      {btn.sampleText || btn.variant}
-                    </span>
-                  </div>
-                  {/* Properties */}
-                  <div className="space-y-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-                    {btn.backgroundColor && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.backgroundColor }} />
-                        <span className="font-mono">{btn.backgroundColor}</span>
-                        <span className="text-[10px]">background</span>
-                      </div>
-                    )}
-                    {btn.textColor && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-sm border border-[hsl(var(--border))]" style={{ backgroundColor: btn.textColor }} />
-                        <span className="font-mono">{btn.textColor}</span>
-                        <span className="text-[10px]">text</span>
-                      </div>
-                    )}
-                    {btn.borderRadius && <div>Radius: <span className="font-mono">{btn.borderRadius}</span></div>}
-                    {btn.padding && <div>Padding: <span className="font-mono">{btn.padding}</span></div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* ─── Design System (Buttons + Effects) ────────────────────────── */}
+        {hasDesignSystem && (
+          <>
+            <hr className="border-[hsl(var(--border))]" />
+            <section className="mx-auto max-w-4xl px-6 py-10 md:py-14">
+              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                Components
+              </p>
+              <h2 className="mt-2 text-xl font-semibold">Design System</h2>
 
-        {/* ─── 04. Effects ─────────────────────────────────────────────── */}
-        {((kit.effects?.shadows?.length || 0) > 0 || (kit.effects?.gradients?.length || 0) > 0) && (
-          <section className="animate-fade-up space-y-6 animation-delay-200">
-            <SectionLabel number="04" label="Effects" title="Shadows & Gradients" />
-
-            {/* Shadows */}
-            {kit.effects?.shadows && kit.effects.shadows.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Box Shadows</h4>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {kit.effects.shadows.map((shadow: ShadowValue, i: number) => (
-                    <div key={i} className="space-y-2">
-                      <div
-                        className="flex h-20 items-center justify-center rounded-xl bg-white"
-                        style={{ boxShadow: shadow.value }}
-                      >
-                        <Badge variant="outline" className="text-[10px] capitalize">{shadow.context}</Badge>
-                      </div>
-                      <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{shadow.value}</p>
+              <div className="mt-8 space-y-8">
+                {/* Buttons as live previews in a row */}
+                {hasButtons && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Buttons
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-6">
+                      {kit.buttons!.styles.map((btn: ButtonStyle, i: number) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center justify-center text-sm"
+                          style={{
+                            backgroundColor: btn.backgroundColor || "transparent",
+                            color: btn.textColor || "inherit",
+                            borderRadius: btn.borderRadius || "4px",
+                            borderWidth: btn.borderWidth || (btn.borderColor ? "1px" : "0"),
+                            borderStyle: btn.borderWidth ? "solid" : btn.borderColor ? "solid" : "none",
+                            borderColor: btn.borderColor || "transparent",
+                            padding: btn.padding || "10px 20px",
+                            fontSize: btn.fontSize || "14px",
+                            fontWeight: btn.fontWeight || 400,
+                            boxShadow: btn.boxShadow || "none",
+                          }}
+                        >
+                          {btn.sampleText || btn.variant}
+                        </span>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {/* Gradients */}
-            {kit.effects?.gradients && kit.effects.gradients.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-[hsl(var(--muted-foreground))]">Gradients</h4>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {kit.effects.gradients.slice(0, 4).map((gradient: GradientValue, i: number) => (
-                    <div key={i} className="space-y-2">
-                      <div
-                        className="h-16 w-full rounded-xl border border-[hsl(var(--border))]"
-                        style={{ backgroundImage: gradient.value }}
-                      />
-                      <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{gradient.value.slice(0, 80)}...</p>
+                {/* Shadows as a single preview card */}
+                {hasShadows && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Shadows
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      {kit.effects!.shadows.map((shadow: ShadowValue, i: number) => (
+                        <div key={i} className="space-y-1.5">
+                          <div
+                            className="flex h-16 w-28 items-center justify-center rounded-xl bg-white"
+                            style={{ boxShadow: shadow.value }}
+                          >
+                            <span className="text-[10px] capitalize text-neutral-400">
+                              {shadow.context}
+                            </span>
+                          </div>
+                          <p className="max-w-[7rem] truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
+                            {shadow.value}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* Gradients as a horizontal strip */}
+                {hasGradients && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Gradients
+                    </p>
+                    <div className="flex overflow-hidden rounded-lg">
+                      {kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
+                        <div key={i} className="min-w-[80px] flex-1">
+                          <div
+                            className="h-16 w-full"
+                            style={{ backgroundImage: gradient.value }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex">
+                      {kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
+                        <div key={i} className="min-w-[80px] flex-1">
+                          <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
+                            {gradient.value.slice(0, 40)}...
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </section>
+            </section>
+          </>
         )}
 
-        {/* ─── 05. Design Assets ──────────────────────────────────────────── */}
-        {kit.designAssets && kit.designAssets.length > 0 && (
-          <section className="animate-fade-up animation-delay-200 space-y-5">
-            <SectionLabel number="05" label="Design Assets" title="Visual Elements" />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {kit.designAssets.slice(0, 9).map((asset: BrandDesignAsset, i: number) => (
-                <div key={i} className="group relative overflow-hidden rounded-xl border border-[hsl(var(--border))]">
-                  <div className="flex aspect-video items-center justify-center bg-checkerboard p-4">
-                    <img
-                      src={asset.src}
-                      alt={asset.alt || "Design asset"}
-                      className="max-h-full max-w-full object-contain"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-3 py-2 text-[10px] text-[hsl(var(--muted-foreground))]">
-                    <span className="font-mono uppercase">{asset.format}</span>
-                    {asset.width && asset.height && (
-                      <span className="tabular-nums">{asset.width}&times;{asset.height}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ─── 06. Voice Tone Spectrum ───────────────────────────────────── */}
+        {/* ─── Voice & Personality ──────────────────────────────────────── */}
         {toneSpectrum &&
           (toneSpectrum.formalCasual !== undefined ||
             toneSpectrum.playfulSerious !== undefined ||
             toneSpectrum.enthusiasticMatterOfFact !== undefined ||
             toneSpectrum.respectfulIrreverent !== undefined ||
             toneSpectrum.technicalAccessible !== undefined) && (
-            <section className="animate-fade-up animation-delay-300 space-y-5">
-              <SectionLabel number="06" label="Voice & Tone" title="Personality" />
+            <>
+              <hr className="border-[hsl(var(--border))]" />
+              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                  Voice & Tone
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">Personality</h2>
 
-              <div className="space-y-8">
-                {/* Radar chart — centered */}
-                <div className="flex justify-center">
+                {/* Radar chart centered */}
+                <div className="mt-10 flex justify-center">
                   <PersonalityRadar spectrum={toneSpectrum} />
                 </div>
 
-                {/* Tone bars as detail breakdown */}
-                <div className="space-y-4">
-                  <ToneBar
-                    label="Formality"
-                    leftLabel="Formal"
-                    rightLabel="Casual"
-                    value={toneSpectrum.formalCasual}
-                  />
-                  <ToneBar
-                    label="Mood"
-                    leftLabel="Playful"
-                    rightLabel="Serious"
-                    value={toneSpectrum.playfulSerious}
-                  />
-                  <ToneBar
-                    label="Energy"
-                    leftLabel="Enthusiastic"
-                    rightLabel="Matter-of-Fact"
-                    value={toneSpectrum.enthusiasticMatterOfFact}
-                  />
-                  <ToneBar
-                    label="Attitude"
-                    leftLabel="Respectful"
-                    rightLabel="Irreverent"
-                    value={toneSpectrum.respectfulIrreverent}
-                  />
-                  <ToneBar
-                    label="Complexity"
-                    leftLabel="Technical"
-                    rightLabel="Accessible"
-                    value={toneSpectrum.technicalAccessible}
-                  />
-                </div>
-              </div>
-            </section>
+                {/* Vibe detail metrics row below radar */}
+                {hasVibe && (
+                  <div className="mt-10 flex flex-wrap justify-center gap-x-10 gap-y-4 border-t border-[hsl(var(--border))] pt-8">
+                    {vibe!.visualEnergy !== undefined && vibe!.visualEnergy !== null && (
+                      <div className="text-center">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                          Visual Energy
+                        </p>
+                        <p className="mt-1 text-lg font-semibold tabular-nums">
+                          {vibe!.visualEnergy}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/10</span>
+                        </p>
+                      </div>
+                    )}
+                    {vibe!.designEra && (
+                      <div className="text-center">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                          Design Era
+                        </p>
+                        <p className="mt-1 text-sm font-medium capitalize">
+                          {vibe!.designEra}
+                        </p>
+                      </div>
+                    )}
+                    {vibe!.emotionalTone && (
+                      <div className="text-center">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                          Emotional Tone
+                        </p>
+                        <p className="mt-1 text-sm font-medium capitalize">
+                          {vibe!.emotionalTone}
+                        </p>
+                      </div>
+                    )}
+                    {vibe!.targetAudienceInferred && (
+                      <div className="text-center">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                          Audience
+                        </p>
+                        <p className="mt-1 text-sm font-medium">
+                          {vibe!.targetAudienceInferred}
+                        </p>
+                      </div>
+                    )}
+                    {vibe!.comparableBrands && vibe!.comparableBrands.length > 0 && (
+                      <div className="text-center">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                          Comparable Brands
+                        </p>
+                        <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+                          {vibe!.comparableBrands.join(", ")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </>
           )}
 
-        {/* ─── 06. Brand Rules ───────────────────────────────────────────── */}
+        {/* ─── Brand Guidelines ────────────────────────────────────────── */}
         {rules &&
           ((rules.dos && rules.dos.length > 0) ||
             (rules.donts && rules.donts.length > 0)) && (
-            <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="07" label="Brand Rules" title="Dos & Don&apos;ts" />
+            <>
+              <hr className="border-[hsl(var(--border))]" />
+              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                  Brand Rules
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">
+                  Dos & Don&apos;ts
+                </h2>
 
-              <div className="grid gap-6 sm:grid-cols-2">
-                {/* DOs */}
-                {rules.dos && rules.dos.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Do
-                    </h4>
-                    <ul className="space-y-2">
-                      {rules.dos.map((rule: string, i: number) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
-                        >
-                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                          {rule}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {/* DON'Ts */}
-                {rules.donts && rules.donts.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-[hsl(var(--destructive))]">
-                      <XCircle className="h-4 w-4" />
-                      Don&apos;t
-                    </h4>
-                    <ul className="space-y-2">
-                      {rules.donts.map((rule: string, i: number) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-2 text-sm leading-relaxed text-[hsl(var(--foreground))]"
-                        >
-                          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--destructive))]" />
-                          {rule}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </section>
+                <div className="mt-8 grid gap-0 sm:grid-cols-2">
+                  {/* Dos */}
+                  {rules.dos && rules.dos.length > 0 && (
+                    <div className="space-y-3 border-r-0 pb-6 pr-0 sm:border-r sm:border-[hsl(var(--border))] sm:pb-0 sm:pr-8">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
+                        Do
+                      </h4>
+                      <ul className="space-y-2.5">
+                        {rules.dos.map((rule: string, i: number) => (
+                          <li
+                            key={i}
+                            className="border-l-2 border-emerald-500 pl-3 text-sm leading-relaxed"
+                          >
+                            {rule}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {/* Don'ts */}
+                  {rules.donts && rules.donts.length > 0 && (
+                    <div className="space-y-3 border-t border-[hsl(var(--border))] pt-6 sm:border-t-0 sm:pl-8 sm:pt-0">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--destructive))]">
+                        Don&apos;t
+                      </h4>
+                      <ul className="space-y-2.5">
+                        {rules.donts.map((rule: string, i: number) => (
+                          <li
+                            key={i}
+                            className="border-l-2 border-[hsl(var(--destructive))] pl-3 text-sm leading-relaxed"
+                          >
+                            {rule}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </>
           )}
 
-        {/* ─── 07. Vibe Details ──────────────────────────────────────────── */}
-        {vibe &&
-          ((vibe.visualEnergy !== undefined && vibe.visualEnergy !== null) ||
-            vibe.designEra ||
-            vibe.emotionalTone ||
-            vibe.targetAudienceInferred) && (
-            <section className="animate-fade-up animation-delay-400 space-y-5">
-              <SectionLabel number="08" label="Brand Vibe" title="Details" />
+        {/* ─── Assets (horizontal scroll strip) ─────────────────────────── */}
+        {kit.designAssets && kit.designAssets.length > 0 && (
+          <>
+            <hr className="border-[hsl(var(--border))]" />
+            <section className="py-10 md:py-14">
+              <div className="mx-auto max-w-4xl px-6">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                  Design Assets
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">Visual Elements</h2>
+              </div>
 
-              {/* Info row */}
-              <div className="flex flex-wrap gap-x-6 gap-y-3">
-                {vibe.designEra && (
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      Design Era
-                    </p>
-                    <p className="mt-0.5 text-sm font-medium capitalize">
-                      {vibe.designEra}
-                    </p>
+              <div className="scrollbar-none mt-6 flex gap-4 overflow-x-auto px-6 pb-2 md:px-[max(1.5rem,calc((100%-56rem)/2+1.5rem))]">
+                {kit.designAssets.slice(0, 12).map((asset: BrandDesignAsset, i: number) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]"
+                    style={{ width: "220px" }}
+                  >
+                    <div className="flex h-36 items-center justify-center bg-checkerboard p-3">
+                      <img
+                        src={asset.src}
+                        alt={asset.alt || "Design asset"}
+                        className="max-h-full max-w-full object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-3 py-2 text-[10px] text-[hsl(var(--muted-foreground))]">
+                      <span className="font-mono uppercase">{asset.format}</span>
+                      {asset.width && asset.height && (
+                        <span className="tabular-nums">
+                          {asset.width}&times;{asset.height}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
-                {vibe.emotionalTone && (
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      Emotional Tone
-                    </p>
-                    <p className="mt-0.5 text-sm font-medium capitalize">
-                      {vibe.emotionalTone}
-                    </p>
-                  </div>
-                )}
-                {vibe.targetAudienceInferred && (
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      Target Audience
-                    </p>
-                    <p className="mt-0.5 text-sm font-medium">
-                      {vibe.targetAudienceInferred}
-                    </p>
-                  </div>
-                )}
+                ))}
               </div>
             </section>
-          )}
+          </>
+        )}
 
-        {/* ─── CTA ──────────────────────────────────────────────────────── */}
-        <section className="animate-fade-up animation-delay-400 rounded-xl border border-[hsl(var(--border))] px-6 py-12 text-center">
-          <h2 className="font-display text-2xl font-bold tracking-tight md:text-3xl">
+        {/* ─── CTA ────────────────────────────────────────────────────── */}
+        <hr className="border-[hsl(var(--border))]" />
+        <section className="mx-auto max-w-4xl px-6 py-20 text-center md:py-28">
+          <h2 className="font-display text-xl font-semibold tracking-tight md:text-2xl">
             Extract your own brand kit
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-[hsl(var(--muted-foreground))]">
+          <p className="mx-auto mt-3 max-w-md text-sm text-[hsl(var(--muted-foreground))]">
             Get colors, fonts, voice, and personality from any website in
             seconds. Open source.
           </p>
-          <div className="mt-6">
+          <div className="mt-8">
             <Button asChild size="lg" className="h-12 px-8">
-              <Link to="/sign-up">
-                Get started free
-              </Link>
+              <Link to="/sign-up">Get started free</Link>
             </Button>
           </div>
         </section>
       </main>
 
-      {/* ─── Footer ─────────────────────────────────────────────────────── */}
+      {/* ─── Footer ─────────────────────────────────────────────────── */}
       <footer className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-5xl px-6 py-10">
+        <div className="mx-auto max-w-4xl px-6 py-10">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <Link to="/" className="flex items-center gap-2">
               <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-7 w-7" />
