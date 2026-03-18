@@ -9,6 +9,7 @@ export default [
   index("routes/_index.tsx"),
   route("sign-in", "routes/sign-in.tsx"),
   route("sign-up", "routes/sign-up.tsx"),
+  route("docs", "routes/docs.tsx"),
   route("brand/:domain", "routes/brand.$domain.tsx"),
   layout("routes/dashboard.tsx", [
     route("dashboard", "routes/dashboard._index.tsx"),

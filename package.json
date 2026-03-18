@@ -13,6 +13,7 @@
     "db:migrate": "echo 'Usage: npx wrangler d1 execute extractvibe-db --remote --file=server/db/migrations/XXXX.sql'"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.4.3",
     "@better-auth/api-key": "^1.5.5",
     "@number-flow/react": "^0.6.0",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -42,7 +43,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.13.1",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.0.4",

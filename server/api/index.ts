@@ -8,8 +8,46 @@ import {
   getClientId,
   getTier,
 } from "../lib/rate-limit";
-
 export const apiRouter = new Hono<{ Bindings: Env }>();
+
+// OpenAPI spec (static, hand-maintained)
+apiRouter.get("/openapi.json", async (c) => {
+  const cached = await c.env.CACHE.get("openapi:spec", "json");
+  if (cached) return c.json(cached);
+
+  // Inline minimal spec — the full spec is at /docs
+  const spec = {
+    openapi: "3.1.0",
+    info: {
+      title: "ExtractVibe API",
+      version: "0.1.0",
+      description: "Open-source brand intelligence API. Extract colors, typography, voice, personality, and design system from any website.",
+      contact: { url: "https://extractvibe.com" },
+    },
+    servers: [{ url: "https://extractvibe.com", description: "Production" }],
+    paths: {
+      "/api/health": { get: { summary: "Health check", responses: { "200": { description: "OK" } } } },
+      "/api/extract": { post: { summary: "Start brand extraction", description: "Anonymous: 3/day. Authenticated: uses 1 credit.", requestBody: { content: { "application/json": { schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } } }, responses: { "202": { description: "Extraction started" }, "429": { description: "Rate limited" } } } },
+      "/api/extract/{jobId}": { get: { summary: "Poll job status", parameters: [{ name: "jobId", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "Job status" } } } },
+      "/api/extract/{jobId}/result": { get: { summary: "Get extraction result", responses: { "200": { description: "Full brand kit" } } } },
+      "/api/extract/{jobId}/export/{format}": { get: { summary: "Export brand kit", parameters: [{ name: "format", in: "path", required: true, schema: { type: "string", enum: ["json", "css", "tailwind", "markdown", "tokens"] } }], responses: { "200": { description: "Exported file" } } } },
+      "/api/brand/{domain}": { get: { summary: "Get cached brand kit by domain", responses: { "200": { description: "Brand kit" }, "404": { description: "Not found" } } } },
+      "/api/extract/history": { get: { summary: "List extraction history", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Extraction list" } } } },
+      "/api/credits": { get: { summary: "Get credit balance", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Credits" } } } },
+      "/api/keys": { get: { summary: "List API keys", security: [{ cookieAuth: [] }], responses: { "200": { description: "Key list" } } }, post: { summary: "Create API key", security: [{ cookieAuth: [] }], responses: { "201": { description: "Key created" } } } },
+      "/api/keys/{id}": { delete: { summary: "Revoke API key", security: [{ cookieAuth: [] }], responses: { "200": { description: "Key revoked" } } } },
+    },
+    components: {
+      securitySchemes: {
+        cookieAuth: { type: "apiKey", in: "cookie", name: "__Secure-better-auth.session_token" },
+        apiKeyAuth: { type: "apiKey", in: "header", name: "x-api-key" },
+      },
+    },
+  };
+
+  await c.env.CACHE.put("openapi:spec", JSON.stringify(spec), { expirationTtl: 86400 });
+  return c.json(spec);
+});
 
 // ---------------------------------------------------------------------------
 // API Index
