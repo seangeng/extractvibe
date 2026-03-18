@@ -97,6 +97,30 @@ app.get("/sitemap.xml", async (c) => {
     { loc: "/", changefreq: "weekly", priority: "1.0" },
     { loc: "/sign-in", changefreq: "monthly", priority: "0.3" },
     { loc: "/sign-up", changefreq: "monthly", priority: "0.5" },
+    { loc: "/docs", changefreq: "weekly", priority: "0.8" },
+    { loc: "/pricing", changefreq: "monthly", priority: "0.9" },
+    { loc: "/about", changefreq: "monthly", priority: "0.6" },
+    { loc: "/changelog", changefreq: "weekly", priority: "0.5" },
+    { loc: "/cli", changefreq: "monthly", priority: "0.5" },
+    { loc: "/open-source", changefreq: "monthly", priority: "0.7" },
+    // Features
+    { loc: "/features/colors", changefreq: "monthly", priority: "0.8" },
+    { loc: "/features/typography", changefreq: "monthly", priority: "0.8" },
+    { loc: "/features/voice", changefreq: "monthly", priority: "0.8" },
+    { loc: "/features/buttons", changefreq: "monthly", priority: "0.7" },
+    { loc: "/features/logos", changefreq: "monthly", priority: "0.7" },
+    { loc: "/features/gradients", changefreq: "monthly", priority: "0.7" },
+    { loc: "/features/design-system", changefreq: "monthly", priority: "0.8" },
+    // Use Cases
+    { loc: "/use-cases/design-agencies", changefreq: "monthly", priority: "0.7" },
+    { loc: "/use-cases/developers", changefreq: "monthly", priority: "0.7" },
+    { loc: "/use-cases/brand-monitoring", changefreq: "monthly", priority: "0.7" },
+    { loc: "/use-cases/competitive-analysis", changefreq: "monthly", priority: "0.7" },
+    { loc: "/use-cases/design-tokens", changefreq: "monthly", priority: "0.7" },
+    // AI
+    { loc: "/ai", changefreq: "monthly", priority: "0.8" },
+    { loc: "/ai/brand-voice-analysis", changefreq: "monthly", priority: "0.7" },
+    { loc: "/ai/vibe-synthesis", changefreq: "monthly", priority: "0.7" },
   ];
 
   // Dynamic brand pages — get all unique domains with completed extractions

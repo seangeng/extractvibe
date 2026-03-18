@@ -5,23 +5,58 @@
 ExtractVibe is an open-source brand intelligence engine that extracts comprehensive brand identity information from any website. It goes beyond simple logo and color detection to analyze brand voice, personality, typography, visual patterns, and design rules.
 
 ## Key Features
-- **Deep Visual Identity**: Extracts logos, color palettes, gradients, spacing patterns, and visual hierarchy from any website.
-- **Brand Voice Analysis**: Uses AI to analyze copy and content to determine brand tone, voice, and communication style.
-- **Typography Detection**: Identifies font families, weights, sizes, and typographic hierarchy.
-- **Brand Rules**: Generates inferred brand guidelines including do's and don'ts for brand usage.
-- **Vibe Synthesis**: Creates a holistic brand personality profile combining visual and verbal identity elements.
-- **Multi-Format Export**: Export brand kits as JSON, PDF, or structured data for use in design tools and AI workflows.
+- **Color Extraction**: Extracts primary, secondary, accent, semantic, and neutral colors with dark mode awareness. Exports as hex, RGB, HSL, CSS custom properties, Tailwind config, or design tokens. See: https://extractvibe.com/features/colors
+- **Typography Detection**: Identifies font families, weights, sizes, line heights, and letter spacing. Reconstructs type scales and detects Google Fonts, Adobe Fonts, and self-hosted typefaces. See: https://extractvibe.com/features/typography
+- **Brand Voice Analysis**: AI-powered analysis of tone, personality traits, copywriting patterns, and writing style guidelines from real website copy. See: https://extractvibe.com/features/voice
+- **Button & CTA Extraction**: Captures button variants, hover/focus states, border radius, padding, and transition timing for complete interactive element reproduction. See: https://extractvibe.com/features/buttons
+- **Logo Detection**: Extracts logos as SVG, PNG, ICO from img tags, inline SVG, favicons, Apple touch icons, and Open Graph images. See: https://extractvibe.com/features/logos
+- **Gradient & Shadow Extraction**: Captures linear, radial, and conic gradients, box shadows, text shadows, and backdrop-filter effects. See: https://extractvibe.com/features/gradients
+- **Design System Extraction**: Combines all visual and verbal identity data into a structured design system with tokens, scales, and component inventory. See: https://extractvibe.com/features/design-system
+- **Vibe Synthesis**: Creates holistic brand personality profiles combining visual and verbal identity elements with confidence scores and brand rules.
+- **Multi-Format Export**: Export brand kits as JSON, CSS custom properties, Tailwind config, Style Dictionary, W3C Design Tokens, or PDF.
+
+## Use Cases
+- **Design Agencies**: Accelerate client onboarding and competitive research with automated brand kit extraction. See: https://extractvibe.com/use-cases/design-agencies
+- **Developers**: Integrate brand intelligence into any application via the REST API with structured JSON output. See: https://extractvibe.com/use-cases/developers
+- **Brand Monitoring**: Schedule recurring extractions to track brand identity changes over time with change detection alerts. See: https://extractvibe.com/use-cases/brand-monitoring
+- **Competitive Analysis**: Extract and compare brand identities across competitors to find positioning gaps. See: https://extractvibe.com/use-cases/competitive-analysis
+- **Design Token Generation**: Convert any website into W3C Design Tokens, Style Dictionary, Tailwind config, or CSS custom properties. See: https://extractvibe.com/use-cases/design-tokens
+
+## AI Technology
+ExtractVibe uses a dual-AI architecture for brand extraction:
+- **Cloudflare Workers AI** (primary): Free models (Llama 3.1 8B) for structured data extraction tasks — parsing HTML/CSS, extracting colors, detecting fonts.
+- **OpenRouter** (fallback): Frontier models (Gemini Flash 2.0) for nuanced language analysis — brand voice, personality profiling, vibe synthesis.
+The five-step extraction pipeline: Fetch & Render -> Parse Assets -> Analyze Voice -> Synthesize Vibe -> Score & Package.
+See: https://extractvibe.com/ai
 
 ## API
 ExtractVibe provides a REST API for programmatic brand extraction:
 - `POST /api/extract` — Start a new brand extraction job for a given URL
-- `GET /api/extract/:id` — Get extraction results by job ID
-- `GET /api/extract/history` — List past extractions
+- `GET /api/extract/:id` — Poll extraction job status
+- `GET /api/extract/:id/result` — Get extraction results by job ID
+- `GET /api/credits` — Check credit balance
+- `POST /api/keys` — Create API key
+- `GET /api/keys` — List API keys
+- `DELETE /api/keys/:id` — Revoke API key
 
 ## Authentication
-API authentication uses API keys passed via the `x-api-key` header. Manage your keys at https://extractvibe.com/dashboard/keys.
+API authentication uses API keys (prefixed with `ev_`) passed via the `x-api-key` header. Session cookies are also supported for browser-based access. Manage keys at https://extractvibe.com/dashboard/keys.
+
+## Pricing
+- **Free**: 50 extractions/month, JSON export, 1 API key
+- **Starter** ($19/mo): 500 extractions/month, all export formats, 5 API keys, batch extraction
+- **Pro** ($49/mo): Unlimited extractions, all features, unlimited API keys, scheduled monitoring, priority support
+See: https://extractvibe.com/pricing
+
+## Developer Tools
+- **API Docs**: Complete API reference with code examples in cURL, JavaScript, and Python. See: https://extractvibe.com/docs
+- **CLI** (coming soon): Extract brands from the terminal. Install via npm, pipe output, integrate with CI/CD. See: https://extractvibe.com/cli
+- **Open Source**: MIT licensed. Self-host on Cloudflare, fork, or contribute. See: https://extractvibe.com/open-source
 
 ## Links
 - Website: https://extractvibe.com
 - API Docs: https://extractvibe.com/docs
+- Pricing: https://extractvibe.com/pricing
+- About: https://extractvibe.com/about
+- Changelog: https://extractvibe.com/changelog
 - GitHub: https://github.com/extractvibe/extractvibe
