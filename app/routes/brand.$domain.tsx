@@ -580,10 +580,12 @@ export default function PublicBrandPage({
                 {/* Gradients — each in its own card */}
                 {hasGradients && kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
                   <div key={`grad-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-                    <div
-                      className="h-28 w-full bg-checkerboard"
-                      style={{ backgroundImage: gradient.value }}
-                    />
+                    <div className="h-28 w-full bg-checkerboard">
+                      <div
+                        className="h-full w-full"
+                        style={{ backgroundImage: gradient.value }}
+                      />
+                    </div>
                     <div className="border-t border-[hsl(var(--border))] px-4 py-3">
                       <Badge variant="outline" className="text-[10px]">gradient</Badge>
                       <p className="mt-1.5 line-clamp-2 break-all font-mono text-[10px] leading-relaxed text-[hsl(var(--muted-foreground))]">
