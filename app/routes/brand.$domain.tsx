@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { Globe, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -82,10 +82,13 @@ function ColorDonut({ colors }: { colors: { key: string; color: ColorValue }[] }
   useEffect(() => setMounted(true), []);
   if (!mounted) return <div className="h-[180px] w-[180px]" />;
 
-  const unique = colors.filter((c, i, arr) => {
-    if (!c.color.hex) return false;
-    return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
-  });
+  const unique = useMemo(
+    () => colors.filter((c, i, arr) => {
+      if (!c.color.hex) return false;
+      return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
+    }),
+    [colors]
+  );
   if (unique.length === 0) return null;
 
   return (
@@ -232,10 +235,13 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
     caption: "text-xs",
   };
 
-  const fontStackLookup = new Map<string, string>();
-  for (const fam of families || []) {
-    fontStackLookup.set(fam.name || "", buildFontStack(fam));
-  }
+  const fontStackLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const fam of families || []) {
+      map.set(fam.name || "", buildFontStack(fam));
+    }
+    return map;
+  }, [families]);
 
   function getFontStack(entry: TypeScaleEntry): string {
     if (entry.fontFamily) {
@@ -247,9 +253,12 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
     return first ? buildFontStack(first) : "system-ui, sans-serif";
   }
 
-  const entries = Object.entries(scale).filter(
-    ([, v]) => v && (v as TypeScaleEntry).fontSize
-  ) as [string, TypeScaleEntry][];
+  const entries = useMemo(
+    () => Object.entries(scale).filter(
+      ([, v]) => v && (v as TypeScaleEntry).fontSize
+    ) as [string, TypeScaleEntry][],
+    [scale]
+  );
 
   if (entries.length === 0) return null;
 
