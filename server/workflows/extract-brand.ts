@@ -4,10 +4,11 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import type { Env } from "../env";
-import {
-  createEmptyBrandKit,
-  type ExtractVibeBrandKit,
-} from "../schema/v1";
+import { createEmptyBrandKit } from "../schema/v1";
+import type { ParseVisualOutput } from "../lib/extractor/parse-visual";
+import type { VoiceAnalysisOutput } from "../lib/extractor/analyze-voice";
+import type { VibeSynthesisOutput } from "../lib/extractor/synthesize-vibe";
+import type { BrandKitDiscoveryOutput } from "../lib/extractor/discover-brand-kit";
 
 interface ExtractBrandParams {
   url: string;
@@ -133,8 +134,8 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       async () => {
         await this.reportProgress(jobId, "synthesize-vibe", "running", 60);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as any;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as any;
+        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
         if (!visualData || !voiceData) throw new Error("Prior step data not found in KV");
 
         const { synthesizeVibe } = await import("../lib/extractor/synthesize-vibe");
@@ -155,7 +156,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             },
             this.env.OPENROUTER_API_KEY
           ),
-          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY),
+          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.FIRECRAWL_API_KEY),
         ]);
 
         await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
@@ -176,30 +177,52 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       async () => {
         await this.reportProgress(jobId, "score-package", "running", 80);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as any;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as any;
-        const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as any;
+        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
+        const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as {
+          vibe: VibeSynthesisOutput;
+          brandKit: BrandKitDiscoveryOutput;
+        } | null;
 
-        // Fetch clean logo from LoadLogo API
-        let loadLogoData: { logo?: string; favicon?: string; name?: string } | null = null;
-        try {
-          const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
-            headers: { "Accept": "application/json" },
-            signal: AbortSignal.timeout(5000),
-          });
-          if (llRes.ok) {
-            const llJson = await llRes.json() as any;
-            loadLogoData = {
-              logo: llJson.logo || null,
-              favicon: llJson.favicon || null,
-              name: llJson.name || null,
-            };
-          }
-        } catch { /* non-fatal */ }
+        // Fetch enrichment data concurrently (LoadLogo + optional Firecrawl map)
+        const [loadLogoData, siteMapUrls] = await Promise.all([
+          // LoadLogo: clean logo + brand name
+          (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
+            try {
+              const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
+                headers: { "Accept": "application/json" },
+                signal: AbortSignal.timeout(5000),
+              });
+              if (!llRes.ok) return null;
+              const llJson = (await llRes.json()) as Record<string, unknown>;
+              return {
+                logo: (llJson.logo as string) || undefined,
+                favicon: (llJson.favicon as string) || undefined,
+                name: (llJson.name as string) || undefined,
+              };
+            } catch { return null; }
+          })(),
+
+          // Firecrawl map: discover site structure (1 credit, optional)
+          (async (): Promise<string[]> => {
+            if (!this.env.FIRECRAWL_API_KEY) return [];
+            try {
+              const { firecrawlMap } = await import("../lib/firecrawl");
+              return await firecrawlMap(this.env.FIRECRAWL_API_KEY, `https://${domain}`, {
+                limit: 50,
+              });
+            } catch { return []; }
+          })(),
+        ]);
 
         const kit = createEmptyBrandKit(url);
         kit.meta.durationMs = Date.now() - startTime;
         kit.meta.extractionDepth = 1;
+
+        // Enrich with site structure from Firecrawl map
+        if (siteMapUrls.length > 0) {
+          kit.meta.sitePageCount = siteMapUrls.length;
+        }
 
         if (visualData) {
           kit.identity = { ...visualData.identity, archetypes: vibeData?.vibe?.archetypes || [] };

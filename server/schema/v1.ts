@@ -56,6 +56,8 @@ export interface BrandKitMeta {
   durationMs?: number;
   /** How many pages/resources were crawled */
   extractionDepth?: number;
+  /** Total pages discovered on the site (via Firecrawl map, if available) */
+  sitePageCount?: number;
 }
 
 // ─── Identity ────────────────────────────────────────────────────────

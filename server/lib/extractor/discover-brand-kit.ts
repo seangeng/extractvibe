@@ -1,13 +1,23 @@
 /**
  * Brand Kit Discovery
  *
- * Probes common paths on a domain to find official brand kit, press kit, or
- * brand guidelines pages.  If one is found, its content is sent to an LLM to
- * extract official brand rules and guidelines.
+ * Discovers official brand guidelines pages using two strategies:
+ *
+ * 1. **Firecrawl search** (preferred): Uses web search to find brand guidelines
+ *    pages for a domain. Much more effective than URL probing — finds pages at
+ *    non-standard paths, subdomains, and third-party brand portals.
+ *    Cost: ~3 credits (2 for search + 1 for scrape).
+ *
+ * 2. **URL probing** (fallback): HEAD-requests common brand kit paths like
+ *    /brand, /press, /media-kit. Used when no Firecrawl API key is configured.
+ *
+ * After finding a candidate page, its content is sent to an LLM to extract
+ * official brand rules and guidelines.
  */
 
 import { openRouterCompletion } from "../ai";
 import { extractJsonFromResponse } from "../llm-utils";
+import { firecrawlSearch, firecrawlScrape } from "../firecrawl";
 
 // ─── Output Type ─────────────────────────────────────────────────────
 
@@ -18,6 +28,8 @@ export interface BrandKitDiscoveryOutput {
   hasOfficialKit: boolean;
   /** Official guideline rules extracted from the brand kit page */
   guidelineRules: string[];
+  /** How the brand kit was discovered */
+  discoveryMethod?: "firecrawl-search" | "url-probe";
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -45,20 +57,126 @@ const REQUEST_TIMEOUT_MS = 8000;
 /** Max body content to send to LLM (chars). */
 const MAX_BODY_CONTENT = 5000;
 
-// ─── Helpers ─────────────────────────────────────────────────────────
+/** Keywords that suggest a page is actually about brand guidelines. */
+const BRAND_KIT_KEYWORDS = [
+  "brand guidelines",
+  "brand assets",
+  "brand kit",
+  "press kit",
+  "media kit",
+  "brand identity",
+  "logo usage",
+  "brand resources",
+  "style guide",
+  "design system",
+  "visual identity",
+  "logo guidelines",
+  "brand standards",
+];
+
+const EMPTY_RESULT: BrandKitDiscoveryOutput = {
+  discoveredUrl: null,
+  hasOfficialKit: false,
+  guidelineRules: [],
+};
+
+// ─── Strategy 1: Firecrawl Search ────────────────────────────────────
+
+/**
+ * Use Firecrawl's search endpoint to find brand guidelines pages.
+ * Cost: 2 credits for search + 1 credit for scrape = 3 credits total.
+ *
+ * This is far more effective than URL probing because it:
+ * - Finds pages at non-standard paths (e.g., /company/brand-toolkit)
+ * - Discovers brand portals on subdomains (e.g., brand.company.com)
+ * - Finds third-party brand pages (e.g., on Brandfetch, Notion, etc.)
+ */
+async function discoverViaFirecrawlSearch(
+  domain: string,
+  firecrawlApiKey: string
+): Promise<{ url: string; content: string } | null> {
+  try {
+    // Search for brand guidelines pages on this domain
+    const results = await firecrawlSearch(
+      firecrawlApiKey,
+      `${domain} brand guidelines OR brand kit OR press kit OR media kit OR style guide`,
+      { limit: 5 }
+    );
+
+    if (results.length === 0) return null;
+
+    // Score and rank results by relevance to brand guidelines
+    const scored = results
+      .map((r) => {
+        const urlLower = r.url.toLowerCase();
+        const titleLower = (r.title || "").toLowerCase();
+        const descLower = (r.description || "").toLowerCase();
+        const combined = `${urlLower} ${titleLower} ${descLower}`;
+
+        let score = 0;
+
+        // Must be from the target domain (or a closely related subdomain)
+        const domainLower = domain.toLowerCase();
+        if (!urlLower.includes(domainLower)) {
+          // Third-party brand pages (brandfetch, etc.) get a small score
+          score += 1;
+        } else {
+          score += 10;
+        }
+
+        // Score based on keyword matches
+        for (const keyword of BRAND_KIT_KEYWORDS) {
+          if (combined.includes(keyword)) score += 5;
+        }
+
+        // URL path hints
+        for (const path of BRAND_KIT_PATHS) {
+          if (urlLower.includes(path)) score += 3;
+        }
+
+        return { ...r, score };
+      })
+      .filter((r) => r.score > 5) // Must have at least some relevance
+      .sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) return null;
+
+    const best = scored[0];
+
+    // Scrape the best result page to get clean content (1 credit)
+    const scraped = await firecrawlScrape(firecrawlApiKey, best.url, {
+      formats: ["markdown"],
+      onlyMainContent: true,
+    });
+
+    const content = scraped?.markdown || best.description || "";
+    if (content.length < 50) {
+      return { url: best.url, content: "" };
+    }
+
+    return {
+      url: best.url,
+      content: content.slice(0, MAX_BODY_CONTENT),
+    };
+  } catch (err) {
+    console.warn(
+      "[discover-brand-kit] Firecrawl search failed, will fall back to URL probing:",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
+}
+
+// ─── Strategy 2: URL Probing (Fallback) ──────────────────────────────
 
 /**
  * Perform a HEAD request to check if a URL exists (returns 200).
- * Returns true if the URL responds with a 200 status and an HTML content type.
  */
 async function probeUrl(url: string): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     const response = await fetch(url, {
       method: "HEAD",
-      signal: controller.signal,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       redirect: "follow",
       headers: {
         "User-Agent":
@@ -66,11 +184,8 @@ async function probeUrl(url: string): Promise<boolean> {
       },
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) return false;
 
-    // Only accept HTML responses (not images, PDFs, etc.)
     const contentType = response.headers.get("content-type") || "";
     return contentType.includes("text/html");
   } catch {
@@ -79,17 +194,13 @@ async function probeUrl(url: string): Promise<boolean> {
 }
 
 /**
- * Fetch the body text of a URL and extract visible text content.
- * Returns the first MAX_BODY_CONTENT chars of the text content, or null on failure.
+ * Fetch the body text of a URL and strip HTML to approximate visible text.
  */
 async function fetchPageText(url: string): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     const response = await fetch(url, {
       method: "GET",
-      signal: controller.signal,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       redirect: "follow",
       headers: {
         "User-Agent":
@@ -98,36 +209,54 @@ async function fetchPageText(url: string): Promise<string | null> {
       },
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) return null;
 
     const html = await response.text();
 
-    // Strip HTML tags to get approximate visible text
     const text = html
-      // Remove script and style blocks
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      // Remove HTML tags
       .replace(/<[^>]+>/g, " ")
-      // Decode common entities
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/&nbsp;/g, " ")
-      // Collapse whitespace
       .replace(/\s+/g, " ")
       .trim();
 
-    if (text.length < 50) return null; // Too short to be meaningful
-
+    if (text.length < 50) return null;
     return text.slice(0, MAX_BODY_CONTENT);
   } catch {
     return null;
   }
+}
+
+/**
+ * Discover brand kit by probing common URL paths.
+ */
+async function discoverViaUrlProbe(
+  domain: string
+): Promise<{ url: string; content: string } | null> {
+  const baseUrl = domain.startsWith("http")
+    ? domain.replace(/\/+$/, "")
+    : `https://${domain}`;
+
+  // Run all probes concurrently
+  const results = await Promise.all(
+    BRAND_KIT_PATHS.map(async (path) => {
+      const url = `${baseUrl}${path}`;
+      const exists = await probeUrl(url);
+      return { url, exists };
+    })
+  );
+
+  const found = results.find((r) => r.exists);
+  if (!found) return null;
+
+  const content = await fetchPageText(found.url);
+  return { url: found.url, content: content || "" };
 }
 
 // ─── LLM Guideline Extraction ────────────────────────────────────────
@@ -165,80 +294,15 @@ Guidelines:
 }
 
 /**
- * Run all async tasks concurrently and return the first non-null result.
- * Returns null if all tasks return null.
+ * Send page content to LLM for guideline extraction.
  */
-async function raceForFirst(
-  tasks: Array<() => Promise<string | null>>
-): Promise<string | null> {
-  // Start all tasks at once, wrapping each to resolve into a tagged result
-  const results = await Promise.all(
-    tasks.map(async (task) => {
-      try {
-        return await task();
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  // Return the first non-null result (preserves path priority order)
-  return results.find((r) => r !== null) ?? null;
-}
-
-// ─── Main Export ─────────────────────────────────────────────────────
-
-export async function discoverBrandKit(
-  domain: string,
+async function extractGuidelines(
+  pageContent: string,
+  pageUrl: string,
   openRouterApiKey: string
-): Promise<BrandKitDiscoveryOutput> {
-  const emptyResult: BrandKitDiscoveryOutput = {
-    discoveredUrl: null,
-    hasOfficialKit: false,
-    guidelineRules: [],
-  };
-
-  // Normalize domain to base URL
-  const baseUrl = domain.startsWith("http")
-    ? domain.replace(/\/+$/, "")
-    : `https://${domain}`;
-
-  // ── Phase 1: Race all path probes — return as soon as any succeeds ──
-  // This avoids waiting for all 12+ HEAD requests when the first path works.
-
-  const foundPage = await raceForFirst(
-    BRAND_KIT_PATHS.map((path) => {
-      const url = `${baseUrl}${path}`;
-      return async () => {
-        const exists = await probeUrl(url);
-        return exists ? url : null;
-      };
-    })
-  );
-
-  if (!foundPage) {
-    return emptyResult;
-  }
-
-  // ── Phase 2: Fetch the page content ──
-
-  const pageText = await fetchPageText(foundPage);
-  if (!pageText) {
-    // Page exists but we could not extract text — still note the URL
-    return {
-      discoveredUrl: foundPage,
-      hasOfficialKit: true,
-      guidelineRules: [],
-    };
-  }
-
-  // ── Phase 3: Send to LLM for guideline extraction ──
-
-  let guidelineRules: string[] = [];
-  let isActualBrandKit = true;
-
+): Promise<{ isActualBrandKit: boolean; guidelineRules: string[] }> {
   try {
-    const prompt = buildGuidelinePrompt(pageText, foundPage);
+    const prompt = buildGuidelinePrompt(pageContent, pageUrl);
     const raw = await openRouterCompletion(
       openRouterApiKey,
       [{ role: "user", content: prompt }],
@@ -251,31 +315,103 @@ export async function discoverBrandKit(
 
     const parsed = extractJsonFromResponse(raw) as Record<string, unknown>;
 
-    if (typeof parsed.isActualBrandKit === "boolean") {
-      isActualBrandKit = parsed.isActualBrandKit;
-    }
+    const isActualBrandKit =
+      typeof parsed.isActualBrandKit === "boolean"
+        ? parsed.isActualBrandKit
+        : true;
 
-    if (Array.isArray(parsed.guidelineRules)) {
-      guidelineRules = parsed.guidelineRules.filter(
-        (r): r is string => typeof r === "string" && r.length > 0
-      );
-    }
+    const guidelineRules = Array.isArray(parsed.guidelineRules)
+      ? parsed.guidelineRules.filter(
+          (r): r is string => typeof r === "string" && r.length > 0
+        )
+      : [];
+
+    return { isActualBrandKit, guidelineRules };
   } catch (err) {
     console.warn(
       "[discover-brand-kit] LLM guideline extraction failed:",
       err instanceof Error ? err.message : err
     );
-    // Still return the discovered URL even if LLM fails
+    return { isActualBrandKit: true, guidelineRules: [] };
+  }
+}
+
+// ─── Main Export ─────────────────────────────────────────────────────
+
+export async function discoverBrandKit(
+  domain: string,
+  openRouterApiKey: string,
+  firecrawlApiKey?: string
+): Promise<BrandKitDiscoveryOutput> {
+  // ── Strategy 1: Firecrawl search (if API key is available) ──
+  if (firecrawlApiKey) {
+    const searchResult = await discoverViaFirecrawlSearch(
+      domain,
+      firecrawlApiKey
+    );
+
+    if (searchResult) {
+      // If we got content, extract guidelines via LLM
+      if (searchResult.content.length > 50) {
+        const { isActualBrandKit, guidelineRules } = await extractGuidelines(
+          searchResult.content,
+          searchResult.url,
+          openRouterApiKey
+        );
+
+        if (!isActualBrandKit) {
+          // Search found a page but LLM says it's not actually a brand kit
+          // Fall through to URL probing as a second chance
+        } else {
+          return {
+            discoveredUrl: searchResult.url,
+            hasOfficialKit: true,
+            guidelineRules,
+            discoveryMethod: "firecrawl-search",
+          };
+        }
+      } else {
+        // Found a URL but couldn't get content
+        return {
+          discoveredUrl: searchResult.url,
+          hasOfficialKit: true,
+          guidelineRules: [],
+          discoveryMethod: "firecrawl-search",
+        };
+      }
+    }
   }
 
+  // ── Strategy 2: URL probing (fallback) ──
+  const probeResult = await discoverViaUrlProbe(domain);
+
+  if (!probeResult) {
+    return EMPTY_RESULT;
+  }
+
+  if (!probeResult.content) {
+    return {
+      discoveredUrl: probeResult.url,
+      hasOfficialKit: true,
+      guidelineRules: [],
+      discoveryMethod: "url-probe",
+    };
+  }
+
+  const { isActualBrandKit, guidelineRules } = await extractGuidelines(
+    probeResult.content,
+    probeResult.url,
+    openRouterApiKey
+  );
+
   if (!isActualBrandKit) {
-    // LLM determined this page is not actually a brand kit
-    return emptyResult;
+    return EMPTY_RESULT;
   }
 
   return {
-    discoveredUrl: foundPage,
+    discoveredUrl: probeResult.url,
     hasOfficialKit: true,
     guidelineRules,
+    discoveryMethod: "url-probe",
   };
 }
