@@ -513,7 +513,7 @@ export default function PublicBrandPage({
                 {hasButtons && kit.buttons!.styles.map((btn: ButtonStyle, i: number) => (
                   <div key={`btn-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
                     {/* Preview area */}
-                    <div className="flex flex-1 items-center justify-center bg-[hsl(var(--muted))]/20 px-5 py-8">
+                    <div className="flex flex-1 items-center justify-center bg-checkerboard px-5 py-8">
                       <span
                         className="inline-flex items-center justify-center text-sm"
                         style={{
@@ -559,7 +559,7 @@ export default function PublicBrandPage({
                 {/* Shadows — each in its own card */}
                 {hasShadows && kit.effects!.shadows.map((shadow: ShadowValue, i: number) => (
                   <div key={`shadow-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-                    <div className="flex flex-1 items-center justify-center bg-[hsl(var(--muted))]/20 p-6">
+                    <div className="flex flex-1 items-center justify-center bg-checkerboard p-6">
                       <div
                         className="h-20 w-full rounded-xl bg-white"
                         style={{ boxShadow: shadow.value }}
@@ -581,7 +581,7 @@ export default function PublicBrandPage({
                 {hasGradients && kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
                   <div key={`grad-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
                     <div
-                      className="h-28 w-full"
+                      className="h-28 w-full bg-checkerboard"
                       style={{ backgroundImage: gradient.value }}
                     />
                     <div className="border-t border-[hsl(var(--border))] px-4 py-3">
