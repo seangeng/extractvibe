@@ -606,62 +606,85 @@ export default function PublicBrandPage({
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Personality</h2>
 
-                {/* Radar chart centered */}
+                {/* Radar chart on subtle background */}
                 <div className="mt-10 flex justify-center">
-                  <PersonalityRadar spectrum={toneSpectrum} />
+                  <div className="relative rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-8 md:p-12">
+                    {/* Subtle radial glow behind the chart */}
+                    <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,hsl(var(--muted))_0%,transparent_70%)]" />
+                    <div className="relative">
+                      <PersonalityRadar spectrum={toneSpectrum} />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Vibe detail metrics row below radar */}
+                {/* Vibe details as a structured grid of cards */}
                 {hasVibe && (
-                  <div className="mt-12 flex flex-wrap justify-center gap-x-14 gap-y-6 border-t border-[hsl(var(--border))] pt-10">
+                  <div className="mt-12 grid gap-4 sm:grid-cols-3">
                     {vibe!.visualEnergy !== undefined && vibe!.visualEnergy !== null && (
-                      <div className="text-center">
+                      <div className="rounded-xl border border-[hsl(var(--border))] p-5">
                         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                           Visual Energy
                         </p>
-                        <p className="mt-1 text-lg font-semibold tabular-nums">
-                          {vibe!.visualEnergy}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/10</span>
-                        </p>
+                        <div className="mt-3 flex items-end gap-1">
+                          <span className="text-3xl font-bold tabular-nums leading-none">
+                            {vibe!.visualEnergy}
+                          </span>
+                          <span className="mb-0.5 text-sm text-[hsl(var(--muted-foreground))]">/10</span>
+                        </div>
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--muted))]">
+                          <div
+                            className="h-full rounded-full bg-[hsl(var(--foreground))]"
+                            style={{ width: `${(vibe!.visualEnergy / 10) * 100}%` }}
+                          />
+                        </div>
                       </div>
                     )}
                     {vibe!.designEra && (
-                      <div className="text-center">
+                      <div className="rounded-xl border border-[hsl(var(--border))] p-5">
                         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                           Design Era
                         </p>
-                        <p className="mt-1 text-sm font-medium capitalize">
+                        <p className="mt-3 text-lg font-semibold capitalize leading-tight">
                           {vibe!.designEra}
                         </p>
                       </div>
                     )}
                     {vibe!.emotionalTone && (
-                      <div className="text-center">
+                      <div className="rounded-xl border border-[hsl(var(--border))] p-5">
                         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                           Emotional Tone
                         </p>
-                        <p className="mt-1 text-sm font-medium capitalize">
+                        <p className="mt-3 text-lg font-semibold capitalize leading-tight">
                           {vibe!.emotionalTone}
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Audience and comparable brands below */}
+                {hasVibe && (vibe!.targetAudienceInferred || (vibe!.comparableBrands && vibe!.comparableBrands.length > 0)) && (
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
                     {vibe!.targetAudienceInferred && (
-                      <div className="text-center">
+                      <div className="rounded-xl border border-[hsl(var(--border))] p-5">
                         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                          Audience
+                          Target Audience
                         </p>
-                        <p className="mt-1 text-sm font-medium">
+                        <p className="mt-3 text-sm leading-relaxed">
                           {vibe!.targetAudienceInferred}
                         </p>
                       </div>
                     )}
                     {vibe!.comparableBrands && vibe!.comparableBrands.length > 0 && (
-                      <div className="text-center">
+                      <div className="rounded-xl border border-[hsl(var(--border))] p-5">
                         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                           Comparable Brands
                         </p>
-                        <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-                          {vibe!.comparableBrands.join(", ")}
-                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {vibe!.comparableBrands.map((brand: string) => (
+                            <Badge key={brand} variant="outline">{brand}</Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
