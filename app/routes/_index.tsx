@@ -3,7 +3,6 @@ import { useNavigate, Link } from "react-router";
 import { ArrowUpRight, Github, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Badge } from "~/components/ui/badge";
 import { useSession } from "~/lib/auth-client";
 import { api } from "~/lib/api";
 import { MarketingFooter } from "~/components/marketing-layout";
@@ -31,15 +30,18 @@ export function meta() {
 const recentlyExtracted = [
   {
     domain: "stripe.com",
-    tags: ["premium", "developer-first", "polished"],
+    logo: "https://img.loadlogo.com/stripe.com",
+    colors: ["#533afd", "#061b31", "#ffffff", "#64748d", "#81b81a"],
   },
   {
     domain: "linear.app",
-    tags: ["minimal", "fast", "modern"],
+    logo: "https://img.loadlogo.com/linear.app",
+    colors: ["#5e6ad2", "#171717", "#f7f8f8", "#8a8f98", "#ffffff"],
   },
   {
     domain: "vercel.com",
-    tags: ["sleek", "dark-mode", "techy"],
+    logo: "https://img.loadlogo.com/vercel.com",
+    colors: ["#000000", "#fafafa", "#171717", "#0068d6", "#4d4d4d"],
   },
 ];
 
@@ -67,7 +69,6 @@ const STEP_LABELS: Record<string, string> = {
 
 export default function LandingPage() {
   const [url, setUrl] = useState("");
-  const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
   const [state, setState] = useState<ExtractState>({ phase: "idle" });
   const navigate = useNavigate();
   const { data: session } = useSession();
@@ -371,20 +372,39 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Social proof — recently extracted domains inline */}
-          <div className="animate-fade-up animation-delay-300 mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <span className="text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+          {/* Social proof — recently extracted with logos + colors */}
+          <div className="animate-fade-up animation-delay-300 mt-14">
+            <p className="mb-5 text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
               Recently extracted
-            </span>
-            {recentlyExtracted.map((brand) => (
-              <Link
-                key={brand.domain}
-                to={`/brand/${brand.domain}`}
-                className="text-sm font-medium text-[hsl(var(--muted-foreground))] underline-offset-4 transition-colors hover:text-[hsl(var(--foreground))] hover:underline"
-              >
-                {brand.domain}
-              </Link>
-            ))}
+            </p>
+            <div className="flex justify-center gap-4">
+              {recentlyExtracted.map((brand) => (
+                <Link
+                  key={brand.domain}
+                  to={`/brand/${brand.domain}`}
+                  className="group flex w-40 flex-col items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-4 transition-all duration-200 hover:border-[hsl(var(--foreground))]/20 hover:bg-[hsl(var(--muted))]/50"
+                >
+                  <img
+                    src={brand.logo}
+                    alt={brand.domain}
+                    className="h-7 w-auto"
+                    loading="lazy"
+                  />
+                  <div className="flex gap-1">
+                    {brand.colors.slice(0, 5).map((color, i) => (
+                      <div
+                        key={i}
+                        className="h-3 w-3 rounded-full border border-[hsl(var(--border))]/50"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))] transition-colors group-hover:text-[hsl(var(--foreground))]">
+                    {brand.domain}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -477,45 +497,6 @@ export default function LandingPage() {
                 Open source
               </span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Recently Extracted — Horizontal Scroll Strip */}
-      <section className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
-          <p className="mb-10 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-            Recently Extracted
-          </p>
-          <div className="scrollbar-none -mx-2 flex gap-4 overflow-x-auto pb-4">
-            {recentlyExtracted.map((brand) => (
-              <Link
-                key={brand.domain}
-                to={`/brand/${brand.domain}`}
-                className="group flex-shrink-0"
-                onMouseEnter={() => setHoveredBrand(brand.domain)}
-                onMouseLeave={() => setHoveredBrand(null)}
-              >
-                <div className="flex min-w-[280px] flex-col rounded-2xl border border-[hsl(var(--border))] px-8 py-10 transition-colors duration-200 hover:bg-[hsl(var(--muted))]">
-                  <span className="font-display text-2xl">{brand.domain}</span>
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {brand.tags.map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  <p
-                    className={`mt-6 flex items-center gap-1.5 text-sm font-medium transition-opacity duration-200 ${
-                      hoveredBrand === brand.domain ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    View brand kit
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </p>
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
       </section>
