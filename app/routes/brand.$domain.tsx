@@ -181,11 +181,11 @@ function ColorStrip({
           {label}
         </p>
       )}
-      <div className="flex overflow-hidden rounded-xl bg-checkerboard">
+      <div className="flex overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-checkerboard">
         {colors.map(({ key, color }) => (
           <div key={key} className="min-w-[60px] flex-1">
             <div
-              className="h-24 w-full border-r border-white/10 last:border-r-0"
+              className="h-24 w-full border-r border-[hsl(var(--border))]/30 last:border-r-0"
               style={{ backgroundColor: color.hex || "#000000" }}
             />
           </div>
