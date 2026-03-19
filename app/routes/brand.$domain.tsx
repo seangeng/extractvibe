@@ -181,7 +181,7 @@ function ColorStrip({
           {label}
         </p>
       )}
-      <div className="flex overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-checkerboard">
+      <div className="flex overflow-hidden rounded-xl border border-[hsl(var(--border))]">
         {colors.map(({ key, color }) => (
           <div key={key} className="min-w-[60px] flex-1">
             <div
@@ -429,7 +429,8 @@ export default function PublicBrandPage({
         {allDisplayColors.length > 0 && (
           <>
             <hr className="border-[hsl(var(--border))]" />
-            <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+            <section className="bg-checkerboard">
+              <div className="mx-auto max-w-4xl px-6 py-16 md:py-20">
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                 Color Palette
               </p>
@@ -458,6 +459,7 @@ export default function PublicBrandPage({
                     />
                   )}
                 </div>
+              </div>
               </div>
             </section>
           </>
