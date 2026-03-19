@@ -4,10 +4,11 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import type { Env } from "../env";
-import {
-  createEmptyBrandKit,
-  type ExtractVibeBrandKit,
-} from "../schema/v1";
+import { createEmptyBrandKit } from "../schema/v1";
+import type { ParseVisualOutput } from "../lib/extractor/parse-visual";
+import type { VoiceAnalysisOutput } from "../lib/extractor/analyze-voice";
+import type { VibeSynthesisOutput } from "../lib/extractor/synthesize-vibe";
+import type { BrandKitDiscoveryOutput } from "../lib/extractor/discover-brand-kit";
 
 interface ExtractBrandParams {
   url: string;
@@ -63,116 +64,63 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
     );
 
     // -----------------------------------------------------------------------
-    // Step 2: Parse visual identity
-    // -----------------------------------------------------------------------
-    const visualResult = await step.do(
-      "parse-assets",
-      { retries: { limit: 1, delay: "3 seconds" }, timeout: "30 seconds" },
-      async () => {
-        await this.reportProgress(jobId, "parse-assets", "running", 20);
-
-        // Load fetch result from KV
-        const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as any;
-        if (!fetchData) throw new Error("Fetch result not found in KV");
-
-        // Transform fetchAndRender output → parseVisualIdentity input
-        // fetch-render.ts produces: elementStyles, cssCustomProperties (object), inlineSvgs[].svg, headings[].tag
-        // parse-visual.ts expects: computedStyles, cssCustomProperties (array), inlineSvgs[].content, headings[].level
-        const adapted = {
-          url: fetchData.meta?.["og:url"] || url,
-          domain,
-          title: fetchData.title,
-          metaDescription: fetchData.description || fetchData.meta?.description,
-          metaThemeColor: fetchData.meta?.["theme-color"] || fetchData.manifestData?.theme_color,
-          manifestThemeColor: fetchData.manifestData?.theme_color,
-          manifestBackgroundColor: fetchData.manifestData?.background_color,
-          icons: fetchData.icons || [],
-          logoImages: (fetchData.logoImages || []).map((img: any) => ({
-            src: img.src,
-            alt: img.alt,
-            context: img.context,
-            width: img.width,
-            height: img.height,
-          })),
-          inlineSvgs: (fetchData.inlineSvgs || []).map((s: any) => ({
-            content: s.svg || s.content,
-            context: s.context,
-            purpose: s.purpose,
-          })),
-          computedStyles: (fetchData.elementStyles || []).map((e: any) => ({
-            selector: e.selector || e.tag,
-            styles: e.styles,
-          })),
-          cssCustomProperties:
-            typeof fetchData.cssCustomProperties === "object" &&
-            !Array.isArray(fetchData.cssCustomProperties)
-              ? Object.entries(fetchData.cssCustomProperties).map(
-                  ([name, value]) => ({
-                    name,
-                    value: String(value),
-                    context: ":root",
-                  })
-                )
-              : fetchData.cssCustomProperties || [],
-          stylesheetUrls: fetchData.stylesheetUrls || [],
-          headings: (fetchData.headings || []).map((h: any) => ({
-            level:
-              typeof h.level === "number"
-                ? h.level
-                : parseInt(h.tag?.replace("h", "") || "1", 10),
-            text: h.text,
-          })),
-          shadows: fetchData.shadows || [],
-          gradients: fetchData.gradients || [],
-          ogImage: fetchData.ogImage || null,
-          designAssets: fetchData.designAssets || [],
-        };
-
-        const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
-        const result = await parseVisualIdentity(adapted, this.env, domain);
-
-        // Store visual result in KV
-        await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {
-          expirationTtl: 3600,
-        });
-
-        await this.reportProgress(jobId, "parse-assets", "complete", 40);
-        return { stored: true };
-      }
-    );
-
-    // -----------------------------------------------------------------------
-    // Step 3: Analyze brand voice
+    // Step 2: Parse visual identity + Analyze voice (parallel)
+    // These two steps are independent — both read from the fetch KV data.
+    // Running them in parallel saves ~3-10s of LLM latency.
     // -----------------------------------------------------------------------
     await step.do(
-      "analyze-voice",
-      { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "60 seconds" },
+      "parse-and-analyze",
+      { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "90 seconds" },
       async () => {
-        await this.reportProgress(jobId, "analyze-voice", "running", 40);
+        await this.reportProgress(jobId, "parse-assets", "running", 20);
+        await this.reportProgress(jobId, "analyze-voice", "running", 20);
 
-        const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as any;
+        // Load fetch result from KV (once, shared by both tasks)
+        const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as Record<string, unknown> | null;
         if (!fetchData) throw new Error("Fetch result not found in KV");
 
-        const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
-        const result = await analyzeVoice(
-          {
-            headings: fetchData.headings || [],
-            heroText: fetchData.heroText || [],
-            ctaTexts: fetchData.ctaTexts || [],
-            navLabels: fetchData.navLabels || [],
-            footerText: fetchData.footerText || "",
-            bodyText: fetchData.bodyText || "",
-            brandName: fetchData.brandName || null,
-            description: fetchData.description || null,
-          },
-          this.env.OPENROUTER_API_KEY
-        );
+        // --- Task A: Parse visual identity ---
+        const parseVisualTask = async () => {
+          const adapted = this.adaptFetchDataForVisual(fetchData, url, domain);
 
-        await this.env.CACHE.put(`${kvKey}:voice`, JSON.stringify(result), {
-          expirationTtl: 3600,
-        });
+          const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
+          const result = await parseVisualIdentity(adapted, this.env, domain);
 
-        await this.reportProgress(jobId, "analyze-voice", "complete", 60);
+          await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {
+            expirationTtl: 3600,
+          });
+
+          await this.reportProgress(jobId, "parse-assets", "complete", 40);
+        };
+
+        // --- Task B: Analyze voice ---
+        const analyzeVoiceTask = async () => {
+          const fd = fetchData as Record<string, unknown>;
+          const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
+          const result = await analyzeVoice(
+            {
+              headings: (fd.headings as Array<{ tag: string; text: string }>) || [],
+              heroText: (fd.heroText as string[]) || [],
+              ctaTexts: (fd.ctaTexts as string[]) || [],
+              navLabels: (fd.navLabels as string[]) || [],
+              footerText: (fd.footerText as string) || "",
+              bodyText: (fd.bodyText as string) || "",
+              brandName: (fd.brandName as string) || null,
+              description: (fd.description as string) || null,
+            },
+            this.env.OPENROUTER_API_KEY
+          );
+
+          await this.env.CACHE.put(`${kvKey}:voice`, JSON.stringify(result), {
+            expirationTtl: 3600,
+          });
+
+          await this.reportProgress(jobId, "analyze-voice", "complete", 60);
+        };
+
+        // Run both in parallel
+        await Promise.all([parseVisualTask(), analyzeVoiceTask()]);
+
         return { stored: true };
       }
     );
@@ -186,8 +134,8 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       async () => {
         await this.reportProgress(jobId, "synthesize-vibe", "running", 60);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as any;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as any;
+        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
         if (!visualData || !voiceData) throw new Error("Prior step data not found in KV");
 
         const { synthesizeVibe } = await import("../lib/extractor/synthesize-vibe");
@@ -208,7 +156,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             },
             this.env.OPENROUTER_API_KEY
           ),
-          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY),
+          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.FIRECRAWL_API_KEY),
         ]);
 
         await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
@@ -229,30 +177,52 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       async () => {
         await this.reportProgress(jobId, "score-package", "running", 80);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as any;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as any;
-        const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as any;
+        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
+        const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as {
+          vibe: VibeSynthesisOutput;
+          brandKit: BrandKitDiscoveryOutput;
+        } | null;
 
-        // Fetch clean logo from LoadLogo API
-        let loadLogoData: { logo?: string; favicon?: string; name?: string } | null = null;
-        try {
-          const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
-            headers: { "Accept": "application/json" },
-            signal: AbortSignal.timeout(5000),
-          });
-          if (llRes.ok) {
-            const llJson = await llRes.json() as any;
-            loadLogoData = {
-              logo: llJson.logo || null,
-              favicon: llJson.favicon || null,
-              name: llJson.name || null,
-            };
-          }
-        } catch { /* non-fatal */ }
+        // Fetch enrichment data concurrently (LoadLogo + optional Firecrawl map)
+        const [loadLogoData, siteMapUrls] = await Promise.all([
+          // LoadLogo: clean logo + brand name
+          (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
+            try {
+              const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
+                headers: { "Accept": "application/json" },
+                signal: AbortSignal.timeout(5000),
+              });
+              if (!llRes.ok) return null;
+              const llJson = (await llRes.json()) as Record<string, unknown>;
+              return {
+                logo: (llJson.logo as string) || undefined,
+                favicon: (llJson.favicon as string) || undefined,
+                name: (llJson.name as string) || undefined,
+              };
+            } catch { return null; }
+          })(),
+
+          // Firecrawl map: discover site structure (1 credit, optional)
+          (async (): Promise<string[]> => {
+            if (!this.env.FIRECRAWL_API_KEY) return [];
+            try {
+              const { firecrawlMap } = await import("../lib/firecrawl");
+              return await firecrawlMap(this.env.FIRECRAWL_API_KEY, `https://${domain}`, {
+                limit: 50,
+              });
+            } catch { return []; }
+          })(),
+        ]);
 
         const kit = createEmptyBrandKit(url);
         kit.meta.durationMs = Date.now() - startTime;
         kit.meta.extractionDepth = 1;
+
+        // Enrich with site structure from Firecrawl map
+        if (siteMapUrls.length > 0) {
+          kit.meta.sitePageCount = siteMapUrls.length;
+        }
 
         if (visualData) {
           kit.identity = { ...visualData.identity, archetypes: vibeData?.vibe?.archetypes || [] };
@@ -350,6 +320,71 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
     );
 
     return finalResult;
+  }
+
+  /**
+   * Transform fetchAndRender KV data into the shape parseVisualIdentity expects.
+   * fetch-render.ts produces: elementStyles, cssCustomProperties (object), inlineSvgs[].svg, headings[].tag
+   * parse-visual.ts expects: computedStyles, cssCustomProperties (array), inlineSvgs[].content, headings[].level
+   */
+  private adaptFetchDataForVisual(
+    fetchData: Record<string, unknown>,
+    url: string,
+    domain: string
+  ): Record<string, unknown> {
+    const fd = fetchData as Record<string, unknown>;
+    const meta = fd.meta as Record<string, string> | undefined;
+    const manifestData = fd.manifestData as Record<string, string> | undefined;
+
+    return {
+      url: meta?.["og:url"] || url,
+      domain,
+      title: fd.title,
+      metaDescription: fd.description || meta?.description,
+      metaThemeColor: meta?.["theme-color"] || manifestData?.theme_color,
+      manifestThemeColor: manifestData?.theme_color,
+      manifestBackgroundColor: manifestData?.background_color,
+      icons: fd.icons || [],
+      logoImages: ((fd.logoImages as Array<Record<string, unknown>>) || []).map((img) => ({
+        src: img.src,
+        alt: img.alt,
+        context: img.context,
+        width: img.width,
+        height: img.height,
+      })),
+      inlineSvgs: ((fd.inlineSvgs as Array<Record<string, unknown>>) || []).map((s) => ({
+        content: s.svg || s.content,
+        context: s.context,
+        purpose: s.purpose,
+      })),
+      computedStyles: ((fd.elementStyles as Array<Record<string, unknown>>) || []).map((e) => ({
+        selector: e.selector || e.tag,
+        styles: e.styles,
+      })),
+      cssCustomProperties:
+        typeof fd.cssCustomProperties === "object" &&
+        !Array.isArray(fd.cssCustomProperties)
+          ? Object.entries(fd.cssCustomProperties as Record<string, unknown>).map(
+              ([name, value]) => ({
+                name,
+                value: String(value),
+                context: ":root",
+              })
+            )
+          : fd.cssCustomProperties || [],
+      stylesheetUrls: fd.stylesheetUrls || [],
+      headings: ((fd.headings as Array<Record<string, unknown>>) || []).map((h) => ({
+        level:
+          typeof h.level === "number"
+            ? h.level
+            : parseInt((h.tag as string)?.replace("h", "") || "1", 10),
+        text: h.text,
+      })),
+      shadows: fd.shadows || [],
+      gradients: fd.gradients || [],
+      ogImage: fd.ogImage || null,
+      designAssets: fd.designAssets || [],
+    };
   }
 
   private async reportProgress(

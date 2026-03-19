@@ -1891,14 +1891,15 @@ function parseIdentity(fetchOutput: FetchRenderOutput): BrandIdentity {
 // ─── Main Export ─────────────────────────────────────────────────────
 
 export async function parseVisualIdentity(
-  rawFetchOutput: any,
+  rawFetchOutput: Partial<FetchRenderOutput> & Record<string, unknown>,
   env: Env,
   domain: string
 ): Promise<ParseVisualOutput> {
   // Normalize field names — fetch-render.ts uses elementStyles, parse-visual expects computedStyles
+  const elementStyles = rawFetchOutput.elementStyles as FetchRenderOutput["computedStyles"] | undefined;
   const fetchOutput: FetchRenderOutput = {
     ...rawFetchOutput,
-    computedStyles: rawFetchOutput.computedStyles || rawFetchOutput.elementStyles || [],
+    computedStyles: rawFetchOutput.computedStyles || elementStyles || [],
     cssCustomProperties: rawFetchOutput.cssCustomProperties || [],
     icons: rawFetchOutput.icons || [],
     logoImages: rawFetchOutput.logoImages || [],
@@ -1910,15 +1911,13 @@ export async function parseVisualIdentity(
     backgroundImages: rawFetchOutput.backgroundImages || [],
     stylesheetUrls: rawFetchOutput.stylesheetUrls || [],
     meta: rawFetchOutput.meta || {},
-  };
+  } as FetchRenderOutput;
 
-  // Run logo parsing (async due to R2 uploads) and sync parsers in parallel
-  const [logoResult, colors, typography, spacing] = await Promise.all([
-    parseLogos(fetchOutput, env, domain),
-    Promise.resolve(parseColors(fetchOutput)),
-    Promise.resolve(parseTypography(fetchOutput)),
-    Promise.resolve(parseSpacing(fetchOutput)),
-  ]);
+  // Run sync parsers immediately, logo parsing is async (R2 uploads)
+  const colors = parseColors(fetchOutput);
+  const typography = parseTypography(fetchOutput);
+  const spacing = parseSpacing(fetchOutput);
+  const logoResult = await parseLogos(fetchOutput, env, domain);
 
   const identity = parseIdentity(fetchOutput);
 

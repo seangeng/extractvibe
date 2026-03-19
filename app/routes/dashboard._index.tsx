@@ -8,9 +8,6 @@ import {
   Globe,
   Sparkles,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
   ExternalLink,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -24,66 +21,11 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { api } from "~/lib/api";
+import type { Extraction, ApiKeyItem } from "~/lib/types";
+import { StatusBadge } from "~/components/status-badge";
 
 export function meta() {
   return [{ title: "Dashboard — ExtractVibe" }];
-}
-
-interface Extraction {
-  id: string;
-  url: string;
-  domain: string;
-  status: "queued" | "running" | "complete" | "failed";
-  durationMs: number | null;
-  createdAt: string;
-  completedAt: string | null;
-}
-
-interface ApiKeyItem {
-  id: string;
-  name: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-}
-
-function StatusBadge({ status }: { status: Extraction["status"] }) {
-  switch (status) {
-    case "complete":
-      return (
-        <Badge variant="success">
-          <CheckCircle2 className="mr-1 h-3 w-3" />
-          Complete
-        </Badge>
-      );
-    case "running":
-      return (
-        <Badge variant="default">
-          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-          Running
-        </Badge>
-      );
-    case "failed":
-      return (
-        <Badge variant="destructive">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Failed
-        </Badge>
-      );
-    case "queued":
-      return (
-        <Badge variant="secondary">
-          <Clock className="mr-1 h-3 w-3" />
-          Queued
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="secondary">
-          <Clock className="mr-1 h-3 w-3" />
-          Unknown
-        </Badge>
-      );
-  }
 }
 
 export default function DashboardIndex() {

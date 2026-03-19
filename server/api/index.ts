@@ -1,6 +1,8 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Env } from "../env";
-import { resolveAuth, isAdminUser } from "../lib/auth-middleware";
+import type { ExtractVibeBrandKit } from "../schema/v1";
+import { resolveAuth, isAdminUser, type AuthResult } from "../lib/auth-middleware";
 import {
   checkRateLimit,
   setRateLimitHeaders,
@@ -8,6 +10,8 @@ import {
   getClientId,
   getTier,
 } from "../lib/rate-limit";
+import { sha256Hex, randomHex } from "../lib/crypto";
+
 export const apiRouter = new Hono<{ Bindings: Env }>();
 
 // OpenAPI spec (static, hand-maintained)
@@ -102,7 +106,10 @@ apiRouter.post("/extract", async (c) => {
       if (credits <= 0) {
         return c.json({ error: "No credits remaining. Upgrade your plan or wait for monthly reset." }, 402);
       }
-      await deductCredit(c.env, auth.userId);
+      const deducted = await deductCredit(c.env, auth.userId);
+      if (!deducted) {
+        return c.json({ error: "No credits remaining. Upgrade your plan or wait for monthly reset." }, 402);
+      }
     }
   }
 
@@ -115,18 +122,45 @@ apiRouter.post("/extract", async (c) => {
   let parsedUrl: URL;
   try {
     let inputUrl = body.url.trim();
+    if (inputUrl.length > 2048) {
+      return c.json({ error: "URL too long (max 2048 characters)" }, 400);
+    }
     if (!inputUrl.startsWith("http")) inputUrl = `https://${inputUrl}`;
     parsedUrl = new URL(inputUrl);
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
       throw new Error("Invalid protocol");
     }
+    // Block private/reserved hostnames to prevent SSRF
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".local") ||
+      hostname.startsWith("127.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      hostname === "0.0.0.0" ||
+      hostname === "[::1]" ||
+      hostname.startsWith("169.254.")
+    ) {
+      return c.json({ error: "Private/internal URLs are not allowed" }, 400);
+    }
   } catch {
     return c.json({ error: "Invalid URL" }, 400);
   }
 
-  const jobId = crypto.randomUUID();
   const domain = parsedUrl.hostname.replace(/^www\./, "");
   const userId = auth.userId || `anon:${clientId}`;
+
+  // Deduplication: reject if the same user already has a queued/running extraction for this domain
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM extraction WHERE "userId" = ? AND domain = ? AND status IN ('queued', 'running') LIMIT 1`
+  ).bind(userId, domain).first<{ id: string }>();
+
+  if (existing) {
+    return c.json({ error: "Extraction already in progress for this domain", jobId: existing.id }, 409);
+  }
+
+  const jobId = crypto.randomUUID();
 
   // Write extraction record
   await c.env.DB.prepare(
@@ -153,14 +187,7 @@ apiRouter.post("/extract", async (c) => {
 // Extract — history (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/history", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const rl = await checkRateLimit(c.env, getClientId(c, auth.userId), `${getTier(auth.plan || null, true)}:read`);
-  if (!rl.allowed) return rateLimitResponse(c, rl);
-  setRateLimitHeaders(c, rl);
+  const auth = await withAuthAndRateLimit(c, "read");
 
   const result = await c.env.DB.prepare(
     `SELECT id, domain, url, status, "durationMs", "createdAt", "completedAt"
@@ -179,14 +206,7 @@ apiRouter.get("/extract/history", async (c) => {
 // Extract — poll job status (open — anyone with the jobId can poll)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId", async (c) => {
-  const auth = await resolveAuth(c);
-  const clientId = getClientId(c, auth.userId);
-  const tier = getTier(auth.plan || null, auth.authenticated);
-
-  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
-  if (!rl.allowed) return rateLimitResponse(c, rl);
-  setRateLimitHeaders(c, rl);
-
+  await withRateLimit(c, "read");
   const jobId = c.req.param("jobId");
 
   try {
@@ -202,14 +222,7 @@ apiRouter.get("/extract/:jobId", async (c) => {
 // Extract — get cached result (open — anyone with the jobId can read)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/result", async (c) => {
-  const auth = await resolveAuth(c);
-  const clientId = getClientId(c, auth.userId);
-  const tier = getTier(auth.plan || null, auth.authenticated);
-
-  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
-  if (!rl.allowed) return rateLimitResponse(c, rl);
-  setRateLimitHeaders(c, rl);
-
+  await withRateLimit(c, "read");
   const jobId = c.req.param("jobId");
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
 
@@ -224,14 +237,7 @@ apiRouter.get("/extract/:jobId/result", async (c) => {
 // Brand — get result by domain (public, rate-limited)
 // ---------------------------------------------------------------------------
 apiRouter.get("/brand/:domain", async (c) => {
-  const auth = await resolveAuth(c);
-  const clientId = getClientId(c, auth.userId);
-  const tier = getTier(auth.plan || null, auth.authenticated);
-
-  const rl = await checkRateLimit(c.env, clientId, `${tier}:read`);
-  if (!rl.allowed) return rateLimitResponse(c, rl);
-  setRateLimitHeaders(c, rl);
-
+  await withRateLimit(c, "read");
   const domain = c.req.param("domain");
   const cached = await c.env.CACHE.get(`brand:${domain}`, "json");
 
@@ -246,74 +252,53 @@ apiRouter.get("/brand/:domain", async (c) => {
 // Export — download brand kit in various formats (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/export/:format", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated) return c.json({ error: "Unauthorized" }, 401);
-
-  const rl = await checkRateLimit(c.env, getClientId(c, auth.userId), `${getTier(auth.plan || null, true)}:read`);
-  if (!rl.allowed) return rateLimitResponse(c, rl);
-  setRateLimitHeaders(c, rl);
+  await withAuthAndRateLimit(c, "read");
 
   const jobId = c.req.param("jobId");
   const format = c.req.param("format");
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
   if (!cached) return c.json({ error: "Result not found" }, 404);
 
+  const kit = cached as ExtractVibeBrandKit;
+  const domain = kit.meta?.domain || "brand";
+
+  if (format === "json") {
+    return new Response(JSON.stringify(kit, null, 2), {
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Disposition": `attachment; filename="${domain}-brand-kit.json"`,
+      },
+    });
+  }
+
   const { exportCssVariables, exportTailwindConfig, exportMarkdownReport, exportDesignTokens } =
     await import("../lib/export-formats");
 
-  const kit = cached as any;
-  const domain = kit.meta?.domain || "brand";
+  const exporters: Record<string, { fn: (k: ExtractVibeBrandKit) => string; contentType: string; ext: string }> = {
+    css:      { fn: exportCssVariables,    contentType: "text/css",           ext: "variables.css" },
+    tailwind: { fn: exportTailwindConfig,  contentType: "text/css",           ext: "tailwind-theme.css" },
+    markdown: { fn: exportMarkdownReport,  contentType: "text/markdown",      ext: "brand-report.md" },
+    tokens:   { fn: exportDesignTokens,    contentType: "application/json",   ext: "design-tokens.json" },
+  };
 
-  switch (format) {
-    case "json":
-      return new Response(JSON.stringify(kit, null, 2), {
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Disposition": `attachment; filename="${domain}-brand-kit.json"`,
-        },
-      });
-    case "css":
-      return new Response(exportCssVariables(kit), {
-        headers: {
-          "Content-Type": "text/css",
-          "Content-Disposition": `attachment; filename="${domain}-variables.css"`,
-        },
-      });
-    case "tailwind":
-      return new Response(exportTailwindConfig(kit), {
-        headers: {
-          "Content-Type": "text/css",
-          "Content-Disposition": `attachment; filename="${domain}-tailwind-theme.css"`,
-        },
-      });
-    case "markdown":
-      return new Response(exportMarkdownReport(kit), {
-        headers: {
-          "Content-Type": "text/markdown",
-          "Content-Disposition": `attachment; filename="${domain}-brand-report.md"`,
-        },
-      });
-    case "tokens":
-      return new Response(exportDesignTokens(kit), {
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Disposition": `attachment; filename="${domain}-design-tokens.json"`,
-        },
-      });
-    default:
-      return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
+  const exporter = exporters[format];
+  if (!exporter) {
+    return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
   }
+
+  return new Response(exporter.fn(kit), {
+    headers: {
+      "Content-Type": exporter.contentType,
+      "Content-Disposition": `attachment; filename="${domain}-${exporter.ext}"`,
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------
 // Credits (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/credits", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
+  const auth = await withAuthAndRateLimit(c, "read");
   const credits = await getUserCredits(c.env, auth.userId);
   const plan = auth.plan || "free";
   return c.json({ credits, plan });
@@ -323,15 +308,11 @@ apiRouter.get("/credits", async (c) => {
 // API Keys — CRUD (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.post("/keys", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
+  const auth = await withAuthAndRateLimit(c, "read");
   const body = await c.req.json<{ name?: string }>();
-  const name = body.name || "Default";
-  const rawKey = `ev_${generateApiKey()}`;
-  const keyHash = await hashApiKey(rawKey);
+  const name = (body.name || "Default").slice(0, 100);
+  const rawKey = `ev_${randomHex()}`;
+  const keyHash = await sha256Hex(rawKey);
   const id = crypto.randomUUID();
 
   await c.env.DB.prepare(
@@ -343,11 +324,7 @@ apiRouter.post("/keys", async (c) => {
 });
 
 apiRouter.get("/keys", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
+  const auth = await withAuthAndRateLimit(c, "read");
   const result = await c.env.DB.prepare(
     `SELECT id, name, "createdAt", "lastUsedAt" FROM api_key WHERE "userId" = ? ORDER BY "createdAt" DESC`
   ).bind(auth.userId).all();
@@ -356,11 +333,7 @@ apiRouter.get("/keys", async (c) => {
 });
 
 apiRouter.delete("/keys/:id", async (c) => {
-  const auth = await resolveAuth(c);
-  if (!auth.authenticated || !auth.userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
+  const auth = await withAuthAndRateLimit(c, "read");
   const keyId = c.req.param("id");
   const result = await c.env.DB.prepare(
     `DELETE FROM api_key WHERE id = ? AND "userId" = ?`
@@ -376,6 +349,39 @@ apiRouter.delete("/keys/:id", async (c) => {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolve auth and apply rate limiting in one call.
+ * Returns the auth result and sets rate limit headers.
+ * Throws a Response if rate limited.
+ */
+async function withRateLimit(
+  c: Context<{ Bindings: Env }>,
+  action: "read" | "extract"
+): Promise<AuthResult> {
+  const auth = await resolveAuth(c);
+  const clientId = getClientId(c, auth.userId);
+  const tier = getTier(auth.plan || null, auth.authenticated);
+  const rl = await checkRateLimit(c.env, clientId, `${tier}:${action}`);
+  if (!rl.allowed) throw rateLimitResponse(c, rl);
+  setRateLimitHeaders(c, rl);
+  return auth;
+}
+
+/**
+ * Like `withRateLimit` but also requires authentication.
+ * Returns the auth result or throws 401.
+ */
+async function withAuthAndRateLimit(
+  c: Context<{ Bindings: Env }>,
+  action: "read" | "extract"
+): Promise<AuthResult & { authenticated: true; userId: string }> {
+  const auth = await withRateLimit(c, action);
+  if (!auth.authenticated || !auth.userId) {
+    throw c.json({ error: "Unauthorized" }, 401);
+  }
+  return auth as AuthResult & { authenticated: true; userId: string };
+}
 
 async function getUserCredits(env: Env, userId: string): Promise<number> {
   const row = await env.DB.prepare(
@@ -393,25 +399,10 @@ async function getUserCredits(env: Env, userId: string): Promise<number> {
   return row.balance;
 }
 
-async function deductCredit(env: Env, userId: string): Promise<void> {
-  await env.DB.prepare(
+async function deductCredit(env: Env, userId: string): Promise<boolean> {
+  const result = await env.DB.prepare(
     `UPDATE credit SET balance = balance - 1 WHERE "userId" = ? AND balance > 0`
   ).bind(userId).run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
-function generateApiKey(): string {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function hashApiKey(key: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(key);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}

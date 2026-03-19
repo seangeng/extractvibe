@@ -13,15 +13,20 @@ const app = new Hono<{ Bindings: Env }>();
 // ---------------------------------------------------------------------------
 // CORS
 // ---------------------------------------------------------------------------
-app.use(
-  "/api/*",
-  cors({
-    origin: ["http://localhost:5173", "https://extractvibe.com"],
+app.use("/api/*", async (c, next) => {
+  // Build allowed origins from BETTER_AUTH_URL (supports dev/staging/prod)
+  const origins = ["https://extractvibe.com"];
+  if (c.env.BETTER_AUTH_URL) {
+    origins.push(c.env.BETTER_AUTH_URL);
+  }
+
+  return cors({
+    origin: origins,
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization", "x-api-key"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  })
-);
+  })(c, next);
+});
 
 // ---------------------------------------------------------------------------
 // www redirect — redirect www.extractvibe.com to extractvibe.com
@@ -66,13 +71,6 @@ app.get("/api/ws/:jobId", async (c) => {
 app.route("/api", apiRouter);
 
 // ---------------------------------------------------------------------------
-// Health check (top-level, outside the sub-router for simple probes)
-// ---------------------------------------------------------------------------
-app.get("/api/health", (c) => {
-  return c.json({ ok: true, version: "0.1.0", timestamp: Date.now() });
-});
-
-// ---------------------------------------------------------------------------
 // robots.txt
 // ---------------------------------------------------------------------------
 app.get("/robots.txt", (c) => {
@@ -90,6 +88,12 @@ app.get("/robots.txt", (c) => {
 // sitemap.xml
 // ---------------------------------------------------------------------------
 app.get("/sitemap.xml", async (c) => {
+  // Serve from KV cache (1 hour TTL) to avoid DB queries on every request
+  const cached = await c.env.CACHE.get("sitemap:xml", "text");
+  if (cached) {
+    return c.body(cached, 200, { "Content-Type": "application/xml" });
+  }
+
   const baseUrl = "https://extractvibe.com";
 
   // Static pages
@@ -129,7 +133,7 @@ app.get("/sitemap.xml", async (c) => {
     const result = await c.env.DB.prepare(
       `SELECT DISTINCT domain FROM extraction WHERE status = 'complete' ORDER BY domain ASC LIMIT 500`
     ).all();
-    brandDomains = (result.results || []).map((r: any) => r.domain);
+    brandDomains = (result.results || []).map((r) => (r as { domain: string }).domain);
   } catch {
     // Non-fatal — serve static sitemap on error
   }
@@ -151,6 +155,9 @@ app.get("/sitemap.xml", async (c) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.join("\n")}
 </urlset>`;
+
+  // Cache the generated sitemap for 1 hour
+  await c.env.CACHE.put("sitemap:xml", xml, { expirationTtl: 3600 });
 
   return c.body(xml, 200, { "Content-Type": "application/xml" });
 });

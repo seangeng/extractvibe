@@ -95,6 +95,7 @@ export default function ExtractPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Elapsed time counter
   useEffect(() => {
@@ -109,21 +110,28 @@ export default function ExtractPage() {
     };
   }, [extracting, complete]);
 
-  const handleProgressMessage = useCallback((data: any) => {
-    if (data.type === "progress") {
-      const stepId = data.stepId || data.step;
+  const handleProgressMessage = useCallback((data: unknown) => {
+    if (!data || typeof data !== "object") return;
+    const msg = data as Record<string, unknown>;
+    const type = msg.type;
+
+    if (type === "progress") {
+      const stepId =
+        (typeof msg.stepId === "string" ? msg.stepId : null)
+        || (typeof msg.step === "string" ? msg.step : null)
+        || "";
+      const msgStatus = typeof msg.status === "string" ? msg.status as StepStatus : undefined;
 
       setSteps((prev) =>
         prev.map((step) => {
-          if (step.id === stepId) {
-            return { ...step, status: data.status as StepStatus };
+          if (step.id === stepId && msgStatus) {
+            return { ...step, status: msgStatus };
           }
-          // Mark previous steps as complete if a later step is running
           const stepOrder = ["fetch", "visual", "voice", "vibe", "package"];
           const currentIdx = stepOrder.indexOf(stepId);
           const thisIdx = stepOrder.indexOf(step.id);
           if (
-            data.status === "running" &&
+            msgStatus === "running" &&
             thisIdx < currentIdx &&
             step.status !== "complete"
           ) {
@@ -133,12 +141,12 @@ export default function ExtractPage() {
         })
       );
 
-      if (data.percent !== undefined) {
-        setPercent(data.percent);
+      if (typeof msg.percent === "number") {
+        setPercent(msg.percent);
       }
     }
 
-    if (data.type === "complete") {
+    if (type === "complete") {
       setComplete(true);
       setExtracting(false);
       setPercent(100);
@@ -147,8 +155,8 @@ export default function ExtractPage() {
       );
     }
 
-    if (data.type === "error") {
-      setError(data.message || "Extraction failed.");
+    if (type === "error") {
+      setError(typeof msg.message === "string" ? msg.message : "Extraction failed.");
       setExtracting(false);
     }
   }, []);
@@ -180,12 +188,14 @@ export default function ExtractPage() {
           wsRef.current = null;
         };
 
-        // Keep alive
-        const pingInterval = setInterval(() => {
+        // Keep alive — store ref so cleanup can clear it
+        if (pingRef.current) clearInterval(pingRef.current);
+        pingRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send("ping");
-          } else {
-            clearInterval(pingInterval);
+          } else if (pingRef.current) {
+            clearInterval(pingRef.current);
+            pingRef.current = null;
           }
         }, 30000);
       } catch {
@@ -196,11 +206,21 @@ export default function ExtractPage() {
   );
 
   function startPolling(id: string) {
+    const MAX_POLLS = 300; // ~15 minutes at 3s intervals
+    let pollCount = 0;
+
     pollRef.current = setInterval(async () => {
+      pollCount++;
+      if (pollCount > MAX_POLLS) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setError("Extraction timed out.");
+        setExtracting(false);
+        return;
+      }
       try {
         const result = await api.get<{
           jobId: string;
-          status: { status: string; error: any; output: any };
+          status: { status: string; error?: { message?: string }; output?: unknown };
         }>(`/api/extract/${id}`);
 
         if (result.status.status === "complete") {
@@ -219,7 +239,7 @@ export default function ExtractPage() {
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {
-        // ignore polling errors
+        // ignore transient polling errors
       }
     }, 3000);
   }
@@ -260,6 +280,7 @@ export default function ExtractPage() {
     return () => {
       wsRef.current?.close();
       if (pollRef.current) clearInterval(pollRef.current);
+      if (pingRef.current) clearInterval(pingRef.current);
     };
   }, []);
 

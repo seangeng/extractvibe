@@ -869,9 +869,10 @@ export async function fetchAndRender(
     // Desktop viewport
     await page.setViewport({ width: 1440, height: 900 });
 
-    // Navigate and wait for the page to fully settle
+    // Navigate — networkidle2 allows 2 in-flight connections (analytics, etc.)
+    // and settles significantly faster than networkidle0 with minimal quality loss
     await page.goto(url, {
-      waitUntil: "networkidle0",
+      waitUntil: "networkidle2",
       timeout: 30_000,
     });
 

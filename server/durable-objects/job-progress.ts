@@ -73,7 +73,6 @@ export class JobProgressDO extends DurableObject<Env> {
       // Store in history so late-connecting clients get the full timeline
       const history = await this.ctx.storage.get<string[]>("progressHistory") || [];
       history.push(message);
-      await this.ctx.storage.put("progressHistory", history);
 
       // If this is the final step completing, also send a "complete" message
       if (update.step === "score-package" && update.status === "complete") {
@@ -86,7 +85,12 @@ export class JobProgressDO extends DurableObject<Env> {
         await this.ctx.storage.put("progressHistory", history);
         this.broadcast(message);
         this.broadcast(completeMsg);
+
+        // Schedule cleanup: delete stored progress after 5 minutes
+        // (clients will have already received the data via WebSocket)
+        this.ctx.storage.setAlarm(Date.now() + 5 * 60 * 1000);
       } else {
+        await this.ctx.storage.put("progressHistory", history);
         this.broadcast(message);
       }
 
@@ -100,6 +104,11 @@ export class JobProgressDO extends DurableObject<Env> {
     if (message === "ping") {
       ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
     }
+  }
+
+  async alarm(): Promise<void> {
+    // Clean up stored progress history to free DO storage
+    await this.ctx.storage.delete("progressHistory");
   }
 
   async webSocketClose(

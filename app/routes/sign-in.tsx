@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Loader2, Github } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { ErrorAlert } from "~/components/error-alert";
 import {
   Card,
   CardContent,
@@ -128,11 +129,7 @@ export default function SignInPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="rounded-md bg-[hsl(var(--destructive))]/10 px-4 py-3 text-sm text-[hsl(var(--destructive))]">
-                  {error}
-                </div>
-              )}
+              {error && <ErrorAlert message={error} />}
               <div className="space-y-2">
                 <label
                   htmlFor="email"

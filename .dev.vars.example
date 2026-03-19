@@ -1,3 +1,8 @@
 BETTER_AUTH_SECRET=your-secret-at-least-32-characters-long-here
 BETTER_AUTH_URL=http://localhost:5173
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
+
+# Optional: Firecrawl API key for enhanced brand kit discovery
+# Get one at https://firecrawl.dev — enables search-based brand guidelines
+# discovery instead of blind URL probing. Uses ~3-4 credits per extraction.
+# FIRECRAWL_API_KEY=fc-your-key-here

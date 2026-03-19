@@ -28,9 +28,9 @@ async function request<T = unknown>(
   if (!res.ok) {
     let message = `Request failed with status ${res.status}`;
     try {
-      const body = await res.json();
-      if (body.message) message = body.message;
-      if (body.error) message = body.error;
+      const body = (await res.json()) as Record<string, unknown>;
+      if (typeof body.message === "string") message = body.message;
+      if (typeof body.error === "string") message = body.error;
     } catch {
       // ignore parse errors
     }

@@ -92,25 +92,34 @@ export default function LandingPage() {
     }
   }, [state, navigate]);
 
-  const handleProgress = useCallback((data: any) => {
-    if (data.type === "progress") {
+  const handleProgress = useCallback((data: unknown) => {
+    if (!data || typeof data !== "object") return;
+    const msg = data as Record<string, unknown>;
+    const type = msg.type;
+
+    if (type === "progress") {
       setState((prev) => {
         if (prev.phase !== "extracting") return prev;
         return {
           ...prev,
-          percent: data.percent ?? prev.percent,
-          step: data.step || data.stepId || prev.step,
+          percent: typeof msg.percent === "number" ? msg.percent : prev.percent,
+          step: (typeof msg.step === "string" ? msg.step : null)
+            || (typeof msg.stepId === "string" ? msg.stepId : null)
+            || prev.step,
         };
       });
     }
-    if (data.type === "complete") {
+    if (type === "complete") {
       setState((prev) => {
         if (prev.phase !== "extracting") return prev;
         return { phase: "complete", domain: prev.domain };
       });
     }
-    if (data.type === "error") {
-      setState({ phase: "error", message: data.message || "Extraction failed." });
+    if (type === "error") {
+      setState({
+        phase: "error",
+        message: typeof msg.message === "string" ? msg.message : "Extraction failed.",
+      });
     }
   }, []);
 
@@ -133,11 +142,20 @@ export default function LandingPage() {
   }
 
   function startPolling(jobId: string) {
+    const MAX_POLLS = 300; // ~15 minutes at 3s intervals
+    let pollCount = 0;
+
     pollRef.current = setInterval(async () => {
+      pollCount++;
+      if (pollCount > MAX_POLLS) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setState({ phase: "error", message: "Extraction timed out." });
+        return;
+      }
       try {
         const result = await api.get<{
           jobId: string;
-          status: { status: string; error: any; output: any };
+          status: { status: string; error?: { message?: string }; output?: unknown };
         }>(`/api/extract/${jobId}`);
 
         if (result.status.status === "complete") {
@@ -152,7 +170,7 @@ export default function LandingPage() {
           });
           if (pollRef.current) clearInterval(pollRef.current);
         }
-      } catch { /* ignore polling errors */ }
+      } catch { /* ignore transient polling errors */ }
     }, 3000);
   }
 
