@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { Globe, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -79,39 +79,63 @@ const LazyPersonalityRadar = lazy(() => import("~/components/charts/personality-
 
 function ColorDonut({ colors }: { colors: { key: string; color: ColorValue }[] }) {
   const [mounted, setMounted] = useState(false);
+  const [hasError, setHasError] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="h-[180px] w-[180px]" />;
+  if (!mounted || hasError) return <div className="h-[180px] w-[180px]" />;
 
-  const unique = useMemo(
-    () => colors.filter((c, i, arr) => {
-      if (!c.color.hex) return false;
-      return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
-    }),
-    [colors]
-  );
+  const unique = colors.filter((c, i, arr) => {
+    if (!c.color.hex) return false;
+    return arr.findIndex((a) => a.color.hex === c.color.hex) === i;
+  });
   if (unique.length === 0) return null;
 
   return (
-    <Suspense fallback={<div className="h-[180px] w-[180px]" />}>
-      <div className="h-[180px] w-[180px]">
-        <LazyColorDonut colors={unique} />
-      </div>
-    </Suspense>
+    <ErrorCatcher onError={() => setHasError(true)}>
+      <Suspense fallback={<div className="h-[180px] w-[180px]" />}>
+        <div className="h-[180px] w-[180px]">
+          <LazyColorDonut colors={unique} />
+        </div>
+      </Suspense>
+    </ErrorCatcher>
   );
 }
 
 function PersonalityRadar({ spectrum }: { spectrum: ToneSpectrum }) {
   const [mounted, setMounted] = useState(false);
+  const [hasError, setHasError] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="h-[280px] w-[280px]" />;
+  if (!mounted || hasError) return <div className="h-[280px] w-[280px]" />;
 
   return (
-    <Suspense fallback={<div className="h-[280px] w-[280px]" />}>
-      <div className="h-[280px] w-[280px]">
-        <LazyPersonalityRadar spectrum={spectrum} />
-      </div>
-    </Suspense>
+    <ErrorCatcher onError={() => setHasError(true)}>
+      <Suspense fallback={<div className="h-[280px] w-[280px]" />}>
+        <div className="h-[280px] w-[280px]">
+          <LazyPersonalityRadar spectrum={spectrum} />
+        </div>
+      </Suspense>
+    </ErrorCatcher>
   );
+}
+
+/** Simple error boundary to catch chart hydration failures gracefully */
+class ErrorCatcher extends React.Component<
+  { children: React.ReactNode; onError?: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onError?: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {
+    this.props.onError?.();
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────

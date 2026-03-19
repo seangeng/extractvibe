@@ -2,7 +2,7 @@
 
 import { PieChart } from "./pie-chart";
 import { PieSliceStatic } from "./pie-slice-static";
-import { PieCenter } from "./pie-center";
+import { PieCenterStatic } from "./pie-center-static";
 
 interface ColorItem {
   key: string;
@@ -25,7 +25,7 @@ export default function ColorDonutChart({ colors }: { colors: ColorItem[] }) {
       cornerRadius={3}
     >
       <PieSliceStatic />
-      <PieCenter defaultLabel="colors" />
+      <PieCenterStatic defaultLabel="colors" />
     </PieChart>
   );
 }
