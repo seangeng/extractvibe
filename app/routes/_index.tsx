@@ -6,6 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { useSession } from "~/lib/auth-client";
 import { api } from "~/lib/api";
+import { MarketingFooter } from "~/components/marketing-layout";
 
 export function meta() {
   return [
@@ -521,42 +522,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <Link to="/" className="flex items-center gap-2.5">
-              <img src="/extract-vibe-logo.svg" className="h-6 w-6" alt="ExtractVibe logo" />
-              <span className="text-sm font-semibold">ExtractVibe</span>
-            </Link>
-            <nav className="flex items-center gap-6 text-sm text-[hsl(var(--muted-foreground))]">
-              <a
-                href="https://github.com/extractvibe/extractvibe"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
-              >
-                GitHub
-              </a>
-              <Link
-                to="/docs"
-                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
-              >
-                Docs
-              </Link>
-              <Link
-                to="/api"
-                className="nav-link transition-colors hover:text-[hsl(var(--foreground))]"
-              >
-                API
-              </Link>
-            </nav>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              &copy; {new Date().getFullYear()} ExtractVibe
-            </p>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

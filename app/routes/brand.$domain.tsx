@@ -4,6 +4,7 @@ import { Globe, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
+import { MarketingFooter } from "~/components/marketing-layout";
 import type { Route } from "./+types/brand.$domain";
 import type {
   ExtractVibeBrandKit,
@@ -785,20 +786,7 @@ export default function PublicBrandPage({
         </section>
       </main>
 
-      {/* ─── Footer ─────────────────────────────────────────────────── */}
-      <footer className="border-t border-[hsl(var(--border))]">
-        <div className="mx-auto max-w-4xl px-6 py-10">
-          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-            <Link to="/" className="flex items-center gap-2">
-              <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-7 w-7" />
-              <span className="font-semibold">ExtractVibe</span>
-            </Link>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              &copy; {new Date().getFullYear()} ExtractVibe. Open source.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

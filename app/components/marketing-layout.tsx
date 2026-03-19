@@ -198,7 +198,7 @@ function MarketingNav() {
   );
 }
 
-function MarketingFooter() {
+export function MarketingFooter() {
   return (
     <footer className="border-t border-[hsl(var(--border))]">
       <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
