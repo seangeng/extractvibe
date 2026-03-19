@@ -13,15 +13,20 @@ const app = new Hono<{ Bindings: Env }>();
 // ---------------------------------------------------------------------------
 // CORS
 // ---------------------------------------------------------------------------
-app.use(
-  "/api/*",
-  cors({
-    origin: ["http://localhost:5173", "https://extractvibe.com"],
+app.use("/api/*", async (c, next) => {
+  // Build allowed origins from BETTER_AUTH_URL (supports dev/staging/prod)
+  const origins = ["https://extractvibe.com"];
+  if (c.env.BETTER_AUTH_URL) {
+    origins.push(c.env.BETTER_AUTH_URL);
+  }
+
+  return cors({
+    origin: origins,
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization", "x-api-key"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  })
-);
+  })(c, next);
+});
 
 // ---------------------------------------------------------------------------
 // www redirect — redirect www.extractvibe.com to extractvibe.com

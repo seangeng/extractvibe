@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Env } from "../env";
 import type { ExtractVibeBrandKit } from "../schema/v1";
-import { resolveAuth, isAdminUser } from "../lib/auth-middleware";
+import { resolveAuth, isAdminUser, type AuthResult } from "../lib/auth-middleware";
 import {
   checkRateLimit,
   setRateLimitHeaders,
@@ -10,6 +11,7 @@ import {
   getTier,
 } from "../lib/rate-limit";
 import { sha256Hex, randomHex } from "../lib/crypto";
+
 export const apiRouter = new Hono<{ Bindings: Env }>();
 
 // OpenAPI spec (static, hand-maintained)
@@ -104,7 +106,10 @@ apiRouter.post("/extract", async (c) => {
       if (credits <= 0) {
         return c.json({ error: "No credits remaining. Upgrade your plan or wait for monthly reset." }, 402);
       }
-      await deductCredit(c.env, auth.userId);
+      const deducted = await deductCredit(c.env, auth.userId);
+      if (!deducted) {
+        return c.json({ error: "No credits remaining. Upgrade your plan or wait for monthly reset." }, 402);
+      }
     }
   }
 
@@ -117,10 +122,27 @@ apiRouter.post("/extract", async (c) => {
   let parsedUrl: URL;
   try {
     let inputUrl = body.url.trim();
+    if (inputUrl.length > 2048) {
+      return c.json({ error: "URL too long (max 2048 characters)" }, 400);
+    }
     if (!inputUrl.startsWith("http")) inputUrl = `https://${inputUrl}`;
     parsedUrl = new URL(inputUrl);
     if (!["http:", "https:"].includes(parsedUrl.protocol)) {
       throw new Error("Invalid protocol");
+    }
+    // Block private/reserved hostnames to prevent SSRF
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".local") ||
+      hostname.startsWith("127.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      hostname === "0.0.0.0" ||
+      hostname === "[::1]" ||
+      hostname.startsWith("169.254.")
+    ) {
+      return c.json({ error: "Private/internal URLs are not allowed" }, 400);
     }
   } catch {
     return c.json({ error: "Invalid URL" }, 400);
@@ -237,51 +259,39 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
   if (!cached) return c.json({ error: "Result not found" }, 404);
 
-  const { exportCssVariables, exportTailwindConfig, exportMarkdownReport, exportDesignTokens } =
-    await import("../lib/export-formats");
-
   const kit = cached as ExtractVibeBrandKit;
   const domain = kit.meta?.domain || "brand";
 
-  switch (format) {
-    case "json":
-      return new Response(JSON.stringify(kit, null, 2), {
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Disposition": `attachment; filename="${domain}-brand-kit.json"`,
-        },
-      });
-    case "css":
-      return new Response(exportCssVariables(kit), {
-        headers: {
-          "Content-Type": "text/css",
-          "Content-Disposition": `attachment; filename="${domain}-variables.css"`,
-        },
-      });
-    case "tailwind":
-      return new Response(exportTailwindConfig(kit), {
-        headers: {
-          "Content-Type": "text/css",
-          "Content-Disposition": `attachment; filename="${domain}-tailwind-theme.css"`,
-        },
-      });
-    case "markdown":
-      return new Response(exportMarkdownReport(kit), {
-        headers: {
-          "Content-Type": "text/markdown",
-          "Content-Disposition": `attachment; filename="${domain}-brand-report.md"`,
-        },
-      });
-    case "tokens":
-      return new Response(exportDesignTokens(kit), {
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Disposition": `attachment; filename="${domain}-design-tokens.json"`,
-        },
-      });
-    default:
-      return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
+  if (format === "json") {
+    return new Response(JSON.stringify(kit, null, 2), {
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Disposition": `attachment; filename="${domain}-brand-kit.json"`,
+      },
+    });
   }
+
+  const { exportCssVariables, exportTailwindConfig, exportMarkdownReport, exportDesignTokens } =
+    await import("../lib/export-formats");
+
+  const exporters: Record<string, { fn: (k: ExtractVibeBrandKit) => string; contentType: string; ext: string }> = {
+    css:      { fn: exportCssVariables,    contentType: "text/css",           ext: "variables.css" },
+    tailwind: { fn: exportTailwindConfig,  contentType: "text/css",           ext: "tailwind-theme.css" },
+    markdown: { fn: exportMarkdownReport,  contentType: "text/markdown",      ext: "brand-report.md" },
+    tokens:   { fn: exportDesignTokens,    contentType: "application/json",   ext: "design-tokens.json" },
+  };
+
+  const exporter = exporters[format];
+  if (!exporter) {
+    return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
+  }
+
+  return new Response(exporter.fn(kit), {
+    headers: {
+      "Content-Type": exporter.contentType,
+      "Content-Disposition": `attachment; filename="${domain}-${exporter.ext}"`,
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -300,7 +310,7 @@ apiRouter.get("/credits", async (c) => {
 apiRouter.post("/keys", async (c) => {
   const auth = await withAuthAndRateLimit(c, "read");
   const body = await c.req.json<{ name?: string }>();
-  const name = body.name || "Default";
+  const name = (body.name || "Default").slice(0, 100);
   const rawKey = `ev_${randomHex()}`;
   const keyHash = await sha256Hex(rawKey);
   const id = crypto.randomUUID();
@@ -339,9 +349,6 @@ apiRouter.delete("/keys/:id", async (c) => {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-import type { Context } from "hono";
-import type { AuthResult } from "../lib/auth-middleware";
 
 /**
  * Resolve auth and apply rate limiting in one call.
@@ -392,9 +399,10 @@ async function getUserCredits(env: Env, userId: string): Promise<number> {
   return row.balance;
 }
 
-async function deductCredit(env: Env, userId: string): Promise<void> {
-  await env.DB.prepare(
+async function deductCredit(env: Env, userId: string): Promise<boolean> {
+  const result = await env.DB.prepare(
     `UPDATE credit SET balance = balance - 1 WHERE "userId" = ? AND balance > 0`
   ).bind(userId).run();
+  return (result.meta.changes ?? 0) > 0;
 }
 

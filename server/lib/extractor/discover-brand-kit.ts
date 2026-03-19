@@ -164,6 +164,28 @@ Guidelines:
 - Return ONLY the JSON object.`;
 }
 
+/**
+ * Run all async tasks concurrently and return the first non-null result.
+ * Returns null if all tasks return null.
+ */
+async function raceForFirst(
+  tasks: Array<() => Promise<string | null>>
+): Promise<string | null> {
+  // Start all tasks at once, wrapping each to resolve into a tagged result
+  const results = await Promise.all(
+    tasks.map(async (task) => {
+      try {
+        return await task();
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  // Return the first non-null result (preserves path priority order)
+  return results.find((r) => r !== null) ?? null;
+}
+
 // ─── Main Export ─────────────────────────────────────────────────────
 
 export async function discoverBrandKit(
@@ -181,29 +203,30 @@ export async function discoverBrandKit(
     ? domain.replace(/\/+$/, "")
     : `https://${domain}`;
 
-  // ── Phase 1: Probe all paths concurrently ──
+  // ── Phase 1: Race all path probes — return as soon as any succeeds ──
+  // This avoids waiting for all 12+ HEAD requests when the first path works.
 
-  const probeResults = await Promise.all(
-    BRAND_KIT_PATHS.map(async (path) => {
+  const foundPage = await raceForFirst(
+    BRAND_KIT_PATHS.map((path) => {
       const url = `${baseUrl}${path}`;
-      const exists = await probeUrl(url);
-      return { url, exists };
+      return async () => {
+        const exists = await probeUrl(url);
+        return exists ? url : null;
+      };
     })
   );
 
-  // Find the first path that returned 200
-  const foundPage = probeResults.find((r) => r.exists);
   if (!foundPage) {
     return emptyResult;
   }
 
   // ── Phase 2: Fetch the page content ──
 
-  const pageText = await fetchPageText(foundPage.url);
+  const pageText = await fetchPageText(foundPage);
   if (!pageText) {
     // Page exists but we could not extract text — still note the URL
     return {
-      discoveredUrl: foundPage.url,
+      discoveredUrl: foundPage,
       hasOfficialKit: true,
       guidelineRules: [],
     };
@@ -215,7 +238,7 @@ export async function discoverBrandKit(
   let isActualBrandKit = true;
 
   try {
-    const prompt = buildGuidelinePrompt(pageText, foundPage.url);
+    const prompt = buildGuidelinePrompt(pageText, foundPage);
     const raw = await openRouterCompletion(
       openRouterApiKey,
       [{ role: "user", content: prompt }],
@@ -251,7 +274,7 @@ export async function discoverBrandKit(
   }
 
   return {
-    discoveredUrl: foundPage.url,
+    discoveredUrl: foundPage,
     hasOfficialKit: true,
     guidelineRules,
   };
