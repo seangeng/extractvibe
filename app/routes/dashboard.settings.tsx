@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { ErrorAlert } from "~/components/error-alert";
 import {
   Card,
   CardContent,
@@ -146,9 +147,7 @@ export default function SettingsPage() {
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
             {passwordError && (
-              <div className="rounded-md bg-[hsl(var(--destructive))]/10 px-4 py-3 text-sm text-[hsl(var(--destructive))]">
-                {passwordError}
-              </div>
+              <ErrorAlert message={passwordError} />
             )}
             {passwordSuccess && (
               <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">

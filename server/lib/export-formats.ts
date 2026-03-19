@@ -17,6 +17,19 @@ import type {
 } from "../schema/v1";
 import { SCHEMA_VERSION } from "../schema/v1";
 
+// ─── Constants ──────────────────────────────────────────────────────────
+
+/** Color mode roles used across all export formats. */
+const COLOR_ROLES: (keyof ColorMode)[] = [
+  "primary", "secondary", "accent", "background", "surface",
+  "text", "secondaryText", "border", "link", "muted",
+];
+
+/** Semantic color roles used across all export formats. */
+const SEMANTIC_ROLES: (keyof SemanticColors)[] = [
+  "success", "warning", "error", "info",
+];
+
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 /** Returns the domain string from the kit, falling back to the URL or "unknown". */
@@ -101,7 +114,7 @@ export function exportCssVariables(kit: ExtractVibeBrandKit): string {
   if (semantic && hasAnyValue(semantic as unknown as Record<string, unknown>)) {
     hasContent = true;
     lines.push("  /* Colors — Semantic */");
-    const roles: (keyof SemanticColors)[] = ["success", "warning", "error", "info"];
+    const roles = SEMANTIC_ROLES;
     for (const role of roles) {
       const color = semantic[role];
       if (color?.hex) {
@@ -194,18 +207,7 @@ function appendColorModeVars(
   prefix: string,
   indent: string = "  "
 ): void {
-  const roles: (keyof ColorMode)[] = [
-    "primary",
-    "secondary",
-    "accent",
-    "background",
-    "surface",
-    "text",
-    "border",
-    "link",
-    "muted",
-  ];
-  for (const role of roles) {
+  for (const role of COLOR_ROLES) {
     const color = mode[role];
     if (color?.hex) {
       lines.push(`${indent}--${prefix}-${role}: ${color.hex};`);
@@ -252,7 +254,7 @@ export function exportTailwindConfig(kit: ExtractVibeBrandKit): string {
   // Semantic colors
   const semantic = kit.colors?.semantic;
   if (semantic && hasAnyValue(semantic as unknown as Record<string, unknown>)) {
-    const roles: (keyof SemanticColors)[] = ["success", "warning", "error", "info"];
+    const roles = SEMANTIC_ROLES;
     for (const role of roles) {
       const color = semantic[role];
       if (color?.hex) {
@@ -418,7 +420,7 @@ export function exportMarkdownReport(kit: ExtractVibeBrandKit): string {
       lines.push("### Semantic");
       lines.push("| Role | Color | Hex |");
       lines.push("|------|-------|-----|");
-      const semanticRoles: (keyof SemanticColors)[] = ["success", "warning", "error", "info"];
+      const semanticRoles = SEMANTIC_ROLES;
       for (const role of semanticRoles) {
         const color = kit.colors!.semantic![role];
         if (color?.hex) {
@@ -667,18 +669,7 @@ function colorSwatch(hex: string): string {
 }
 
 function appendColorTableRows(lines: string[], mode: ColorMode): void {
-  const roles: (keyof ColorMode)[] = [
-    "primary",
-    "secondary",
-    "accent",
-    "background",
-    "surface",
-    "text",
-    "border",
-    "link",
-    "muted",
-  ];
-  for (const role of roles) {
+  for (const role of COLOR_ROLES) {
     const color = mode[role];
     if (color?.hex) {
       lines.push(`| ${capitalize(role)} | ${colorSwatch(color.hex)} | \`${color.hex}\` |`);

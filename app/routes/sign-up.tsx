@@ -4,6 +4,7 @@ import { Loader2, Github } from "lucide-react";
 import { signIn } from "~/lib/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { ErrorAlert } from "~/components/error-alert";
 import {
   Card,
   CardContent,
@@ -138,9 +139,7 @@ export default function SignUpPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="rounded-md bg-[hsl(var(--destructive))]/10 px-4 py-3 text-sm text-[hsl(var(--destructive))]">
-                  {error}
-                </div>
+                <ErrorAlert message={error} />
               )}
               <div className="space-y-2">
                 <label
