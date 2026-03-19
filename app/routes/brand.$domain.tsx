@@ -508,119 +508,90 @@ export default function PublicBrandPage({
               </p>
               <h2 className="mt-2 text-xl font-semibold">Design System</h2>
 
-              <div className="mt-8 space-y-8">
-                {/* Buttons — live preview + expandable specs */}
-                {hasButtons && (
-                  <div className="space-y-4">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                      Buttons
-                    </p>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {kit.buttons!.styles.map((btn: ButtonStyle, i: number) => (
-                        <details key={i} className="group rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-                          <summary className="flex cursor-pointer items-center justify-between bg-[hsl(var(--card))] px-5 py-5 [&::-webkit-details-marker]:hidden">
-                            <span
-                              className="inline-flex items-center justify-center text-sm"
-                              style={{
-                                backgroundColor: btn.backgroundColor || "transparent",
-                                color: btn.textColor || "inherit",
-                                borderRadius: btn.borderRadius || "4px",
-                                borderWidth: btn.borderWidth || (btn.borderColor ? "1px" : "0"),
-                                borderStyle: btn.borderWidth ? "solid" : btn.borderColor ? "solid" : "none",
-                                borderColor: btn.borderColor || "transparent",
-                                padding: btn.padding || "10px 20px",
-                                fontSize: btn.fontSize || "14px",
-                                fontWeight: btn.fontWeight || 400,
-                                boxShadow: btn.boxShadow || "none",
-                              }}
-                            >
-                              {btn.sampleText || btn.variant}
-                            </span>
-                            <Badge variant="outline" className="text-[10px] capitalize group-open:hidden">{btn.variant}</Badge>
-                            <span className="hidden text-xs text-[hsl(var(--muted-foreground))] group-open:inline">specs</span>
-                          </summary>
-                          <div className="space-y-1.5 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-5 py-4 font-mono text-xs text-[hsl(var(--muted-foreground))]">
-                            {btn.backgroundColor && (
-                              <div className="flex items-center gap-2">
-                                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: btn.backgroundColor }} />
-                                background: {btn.backgroundColor}
-                              </div>
-                            )}
-                            {btn.textColor && (
-                              <div className="flex items-center gap-2">
-                                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: btn.textColor }} />
-                                color: {btn.textColor}
-                              </div>
-                            )}
-                            {btn.borderRadius && <div>border-radius: {btn.borderRadius}</div>}
-                            {btn.borderColor && <div>border-color: {btn.borderColor}</div>}
-                            {btn.padding && <div>padding: {btn.padding}</div>}
-                            {btn.fontWeight && <div>font-weight: {btn.fontWeight}</div>}
-                            {btn.boxShadow && <div>box-shadow: {btn.boxShadow.slice(0, 50)}...</div>}
-                          </div>
-                        </details>
-                      ))}
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Buttons — each in its own card */}
+                {hasButtons && kit.buttons!.styles.map((btn: ButtonStyle, i: number) => (
+                  <div key={`btn-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+                    {/* Preview area */}
+                    <div className="flex flex-1 items-center justify-center bg-[hsl(var(--muted))]/20 px-5 py-8">
+                      <span
+                        className="inline-flex items-center justify-center text-sm"
+                        style={{
+                          backgroundColor: btn.backgroundColor || "transparent",
+                          color: btn.textColor || "inherit",
+                          borderRadius: btn.borderRadius || "4px",
+                          borderWidth: btn.borderWidth || (btn.borderColor ? "1px" : "0"),
+                          borderStyle: btn.borderWidth ? "solid" : btn.borderColor ? "solid" : "none",
+                          borderColor: btn.borderColor || "transparent",
+                          padding: btn.padding || "10px 20px",
+                          fontSize: btn.fontSize || "14px",
+                          fontWeight: btn.fontWeight || 400,
+                          boxShadow: btn.boxShadow || "none",
+                        }}
+                      >
+                        {btn.sampleText || btn.variant}
+                      </span>
+                    </div>
+                    {/* Specs */}
+                    <div className="border-t border-[hsl(var(--border))] px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[10px] capitalize">{btn.variant}</Badge>
+                        {btn.borderRadius && <span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{btn.borderRadius}</span>}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
+                        {btn.backgroundColor && (
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2.5 w-2.5 rounded-full border border-[hsl(var(--border))]" style={{ backgroundColor: btn.backgroundColor }} />
+                            {btn.backgroundColor}
+                          </span>
+                        )}
+                        {btn.textColor && (
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2.5 w-2.5 rounded-full border border-[hsl(var(--border))]" style={{ backgroundColor: btn.textColor }} />
+                            {btn.textColor}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
+                ))}
 
-                {/* Shadows — expandable with full CSS */}
-                {hasShadows && (
-                  <div className="space-y-4">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                      Shadows
-                    </p>
-                    <div className="flex flex-wrap gap-4">
-                      {kit.effects!.shadows.map((shadow: ShadowValue, i: number) => (
-                        <details key={i} className="group">
-                          <summary className="cursor-pointer [&::-webkit-details-marker]:hidden">
-                            <div
-                              className="flex h-20 w-36 items-center justify-center rounded-xl bg-white transition-transform group-hover:scale-105"
-                              style={{ boxShadow: shadow.value }}
-                            >
-                              <span className="text-[10px] capitalize text-neutral-400">
-                                {shadow.context}
-                              </span>
-                            </div>
-                          </summary>
-                          <div className="mt-2 max-w-[18rem] rounded-lg bg-[hsl(var(--muted))]/50 px-3 py-2">
-                            <p className="break-all font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
-                              {shadow.value}
-                            </p>
-                          </div>
-                        </details>
-                      ))}
+                {/* Shadows — each in its own card */}
+                {hasShadows && kit.effects!.shadows.map((shadow: ShadowValue, i: number) => (
+                  <div key={`shadow-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+                    <div className="flex flex-1 items-center justify-center bg-[hsl(var(--muted))]/20 p-6">
+                      <div
+                        className="h-20 w-full rounded-xl bg-white"
+                        style={{ boxShadow: shadow.value }}
+                      />
+                    </div>
+                    <div className="border-t border-[hsl(var(--border))] px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[10px] capitalize">{shadow.context || "shadow"}</Badge>
+                        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">box-shadow</span>
+                      </div>
+                      <p className="mt-1.5 line-clamp-2 break-all font-mono text-[10px] leading-relaxed text-[hsl(var(--muted-foreground))]">
+                        {shadow.value}
+                      </p>
                     </div>
                   </div>
-                )}
+                ))}
 
-                {/* Gradients as a horizontal strip */}
-                {hasGradients && (
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                      Gradients
-                    </p>
-                    <div className="flex overflow-hidden rounded-lg">
-                      {kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
-                        <div key={i} className="min-w-[80px] flex-1">
-                          <div
-                            className="h-16 w-full"
-                            style={{ backgroundImage: gradient.value }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex">
-                      {kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
-                        <div key={i} className="min-w-[80px] flex-1">
-                          <p className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
-                            {gradient.value.slice(0, 40)}...
-                          </p>
-                        </div>
-                      ))}
+                {/* Gradients — each in its own card */}
+                {hasGradients && kit.effects!.gradients.slice(0, 6).map((gradient: GradientValue, i: number) => (
+                  <div key={`grad-${i}`} className="flex flex-col rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+                    <div
+                      className="h-28 w-full"
+                      style={{ backgroundImage: gradient.value }}
+                    />
+                    <div className="border-t border-[hsl(var(--border))] px-4 py-3">
+                      <Badge variant="outline" className="text-[10px]">gradient</Badge>
+                      <p className="mt-1.5 line-clamp-2 break-all font-mono text-[10px] leading-relaxed text-[hsl(var(--muted-foreground))]">
+                        {gradient.value.slice(0, 80)}...
+                      </p>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
             </section>
           </>
