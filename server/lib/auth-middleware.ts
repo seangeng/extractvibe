@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAuth } from "./auth";
+import { sha256Hex } from "./crypto";
 
 export interface AuthResult {
   authenticated: boolean;
@@ -64,12 +65,7 @@ async function lookupApiKey(
   env: Env,
   key: string
 ): Promise<{ userId: string } | null> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(key);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  const keyHash = Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const keyHash = await sha256Hex(key);
 
   const row = await env.DB.prepare(
     `SELECT "userId" FROM api_key WHERE "keyHash" = ?`

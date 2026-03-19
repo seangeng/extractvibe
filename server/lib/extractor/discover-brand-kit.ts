@@ -7,6 +7,7 @@
  */
 
 import { openRouterCompletion } from "../ai";
+import { extractJsonFromResponse } from "../llm-utils";
 
 // ─── Output Type ─────────────────────────────────────────────────────
 
@@ -161,14 +162,6 @@ Guidelines:
 - Each rule should be specific and actionable.
 - Include color values, font names, spacing values, and other concrete details when present.
 - Return ONLY the JSON object.`;
-}
-
-function extractJsonFromResponse(raw: string): unknown {
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  }
-  return JSON.parse(cleaned);
 }
 
 // ─── Main Export ─────────────────────────────────────────────────────

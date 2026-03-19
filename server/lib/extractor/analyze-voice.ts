@@ -8,6 +8,13 @@
  */
 
 import { openRouterCompletion } from "../ai";
+import {
+  extractJsonFromResponse,
+  safeString,
+  safeStringArray,
+  clampScore1to10,
+} from "../llm-utils";
+import { detectHeadingCase as detectHeadingCaseFromVisual } from "./parse-visual";
 import type {
   BrandVoice,
   ToneSpectrum,
@@ -47,51 +54,7 @@ const EMOJI_RE = new RegExp(
 );
 
 function detectHeadingCase(headings: Array<{ text: string }>): HeadingCase {
-  if (headings.length === 0) return "sentence-case";
-
-  let titleCount = 0;
-  let sentenceCount = 0;
-  let lowerCount = 0;
-  let upperCount = 0;
-
-  for (const { text } of headings) {
-    const trimmed = text.trim();
-    if (!trimmed || trimmed.length < 3) continue;
-
-    if (trimmed === trimmed.toUpperCase() && trimmed !== trimmed.toLowerCase()) {
-      upperCount++;
-      continue;
-    }
-
-    if (trimmed === trimmed.toLowerCase()) {
-      lowerCount++;
-      continue;
-    }
-
-    // Title case: most words (>= 3 chars) start with uppercase
-    const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
-    const significantWords = words.filter((w) => w.length >= 3);
-    const capitalizedSignificant = significantWords.filter(
-      (w) => /^[A-Z]/.test(w)
-    );
-
-    if (
-      significantWords.length > 0 &&
-      capitalizedSignificant.length / significantWords.length >= 0.7
-    ) {
-      titleCount++;
-    } else {
-      sentenceCount++;
-    }
-  }
-
-  const total = titleCount + sentenceCount + lowerCount + upperCount;
-  if (total === 0) return "sentence-case";
-
-  if (upperCount / total >= 0.5) return "uppercase";
-  if (lowerCount / total >= 0.5) return "lowercase";
-  if (titleCount >= sentenceCount) return "title-case";
-  return "sentence-case";
+  return detectHeadingCaseFromVisual(headings.map((h) => h.text));
 }
 
 function detectEmojiUsage(allText: string): EmojiUsage {
@@ -209,36 +172,7 @@ Guidelines:
 }
 
 // ─── JSON Parsing ────────────────────────────────────────────────────
-
-function extractJsonFromResponse(raw: string): unknown {
-  // Strip markdown code fences if present
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  }
-
-  return JSON.parse(cleaned);
-}
-
-function clampScore(value: unknown, fallback: number): number {
-  if (typeof value === "number" && value >= 1 && value <= 10) {
-    return Math.round(value);
-  }
-  return fallback;
-}
-
-function safeString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0
-    ? value
-    : fallback;
-}
-
-function safeStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === "string" && v.length > 0);
-  }
-  return [];
-}
+// Uses shared utilities from ../llm-utils
 
 // ─── Main Export ─────────────────────────────────────────────────────
 
@@ -286,11 +220,11 @@ export async function analyzeVoice(
     if (parsed.toneSpectrum && typeof parsed.toneSpectrum === "object") {
       const ts = parsed.toneSpectrum as Record<string, unknown>;
       llmToneSpectrum = {
-        formalCasual: clampScore(ts.formalCasual, 5),
-        playfulSerious: clampScore(ts.playfulSerious, 5),
-        enthusiasticMatterOfFact: clampScore(ts.enthusiasticMatterOfFact, 5),
-        respectfulIrreverent: clampScore(ts.respectfulIrreverent, 3),
-        technicalAccessible: clampScore(ts.technicalAccessible, 5),
+        formalCasual: clampScore1to10(ts.formalCasual, 5),
+        playfulSerious: clampScore1to10(ts.playfulSerious, 5),
+        enthusiasticMatterOfFact: clampScore1to10(ts.enthusiasticMatterOfFact, 5),
+        respectfulIrreverent: clampScore1to10(ts.respectfulIrreverent, 3),
+        technicalAccessible: clampScore1to10(ts.technicalAccessible, 5),
       };
     }
 

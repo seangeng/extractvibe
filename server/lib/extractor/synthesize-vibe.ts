@@ -7,6 +7,13 @@
  */
 
 import { openRouterCompletion } from "../ai";
+import {
+  extractJsonFromResponse,
+  safeString,
+  safeStringArray,
+  clampScore1to10,
+  clamp01,
+} from "../llm-utils";
 import type {
   BrandVibe,
   BrandRules,
@@ -306,42 +313,7 @@ Return ONLY the JSON object.`;
 }
 
 // ─── JSON Parsing ────────────────────────────────────────────────────
-
-function extractJsonFromResponse(raw: string): unknown {
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  }
-  return JSON.parse(cleaned);
-}
-
-function clamp01(value: unknown, fallback: number): number {
-  if (typeof value === "number" && value >= 0 && value <= 1) {
-    return Math.round(value * 100) / 100;
-  }
-  return fallback;
-}
-
-function clamp110(value: unknown, fallback: number): number {
-  if (typeof value === "number" && value >= 1 && value <= 10) {
-    return Math.round(value);
-  }
-  return fallback;
-}
-
-function safeString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
-}
-
-function safeStringArray(value: unknown, fallback: string[] = []): string[] {
-  if (Array.isArray(value)) {
-    const filtered = value.filter(
-      (v): v is string => typeof v === "string" && v.length > 0
-    );
-    return filtered.length > 0 ? filtered : fallback;
-  }
-  return fallback;
-}
+// Uses shared utilities from ../llm-utils
 
 // ─── Fallback Defaults ───────────────────────────────────────────────
 
@@ -418,7 +390,7 @@ export async function synthesizeVibe(
       `${input.identity.brandName || input.domain} presents a professional web presence.`
     ),
     tags: safeStringArray(vibeRaw.tags, ["professional"]),
-    visualEnergy: clamp110(vibeRaw.visualEnergy, 5),
+    visualEnergy: clampScore1to10(vibeRaw.visualEnergy, 5),
     designEra: safeString(vibeRaw.designEra, "contemporary"),
     comparableBrands: safeStringArray(vibeRaw.comparableBrands),
     emotionalTone: safeString(vibeRaw.emotionalTone, "professional"),
