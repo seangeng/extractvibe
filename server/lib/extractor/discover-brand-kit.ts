@@ -3,13 +3,14 @@
  *
  * Discovers official brand guidelines pages using two strategies:
  *
- * 1. **Firecrawl search** (preferred): Uses web search to find brand guidelines
- *    pages for a domain. Much more effective than URL probing — finds pages at
- *    non-standard paths, subdomains, and third-party brand portals.
- *    Cost: ~3 credits (2 for search + 1 for scrape).
+ * 1. **Enhanced URL probing** (free, always runs first): HEAD-requests ~30
+ *    common brand kit paths plus subdomain checks. Catches ~60-70% of
+ *    established brands at zero cost.
  *
- * 2. **URL probing** (fallback): HEAD-requests common brand kit paths like
- *    /brand, /press, /media-kit. Used when no Firecrawl API key is configured.
+ * 2. **Serper.dev Google search** (fallback, ~$0.001/query): If probing finds
+ *    nothing and a SERPER_API_KEY is configured, performs a single Google SERP
+ *    query to find brand guideline pages at non-standard paths, subdomains,
+ *    or third-party brand portals.
  *
  * After finding a candidate page, its content is sent to an LLM to extract
  * official brand rules and guidelines.
@@ -17,7 +18,7 @@
 
 import { openRouterCompletion } from "../ai";
 import { extractJsonFromResponse } from "../llm-utils";
-import { firecrawlSearch, firecrawlScrape } from "../firecrawl";
+import { serperSearch } from "../serper";
 
 // ─── Output Type ─────────────────────────────────────────────────────
 
@@ -29,26 +30,51 @@ export interface BrandKitDiscoveryOutput {
   /** Official guideline rules extracted from the brand kit page */
   guidelineRules: string[];
   /** How the brand kit was discovered */
-  discoveryMethod?: "firecrawl-search" | "url-probe";
+  discoveryMethod?: "serper-search" | "url-probe";
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-/** Common paths where brands publish brand kits / press kits. */
+/** Expanded list of common paths where brands publish brand kits / press kits. */
 const BRAND_KIT_PATHS = [
   "/brand",
   "/brand-assets",
-  "/press",
-  "/media-kit",
-  "/press-kit",
-  "/about/brand",
-  "/identity",
   "/brand-guidelines",
-  "/logos",
-  "/about/press",
-  "/newsroom",
+  "/brand-kit",
+  "/brand-resources",
+  "/branding",
+  "/press",
+  "/press-kit",
+  "/presskit",
+  "/press-room",
+  "/pressroom",
   "/media",
+  "/media-kit",
+  "/mediakit",
+  "/media-resources",
+  "/newsroom",
+  "/news-room",
+  "/about/brand",
+  "/about/press",
+  "/about/media",
+  "/identity",
+  "/style-guide",
+  "/styleguide",
+  "/design",
+  "/design-system",
+  "/logos",
+  "/logo",
   "/assets",
+  "/resources",
+  "/guidelines",
+] as const;
+
+/** Subdomains to check for brand portals. */
+const BRAND_SUBDOMAINS = [
+  "brand",
+  "press",
+  "media",
+  "design",
 ] as const;
 
 /** Timeout for individual HTTP requests in ms. */
@@ -80,94 +106,7 @@ const EMPTY_RESULT: BrandKitDiscoveryOutput = {
   guidelineRules: [],
 };
 
-// ─── Strategy 1: Firecrawl Search ────────────────────────────────────
-
-/**
- * Use Firecrawl's search endpoint to find brand guidelines pages.
- * Cost: 2 credits for search + 1 credit for scrape = 3 credits total.
- *
- * This is far more effective than URL probing because it:
- * - Finds pages at non-standard paths (e.g., /company/brand-toolkit)
- * - Discovers brand portals on subdomains (e.g., brand.company.com)
- * - Finds third-party brand pages (e.g., on Brandfetch, Notion, etc.)
- */
-async function discoverViaFirecrawlSearch(
-  domain: string,
-  firecrawlApiKey: string
-): Promise<{ url: string; content: string } | null> {
-  try {
-    // Search for brand guidelines pages on this domain
-    const results = await firecrawlSearch(
-      firecrawlApiKey,
-      `${domain} brand guidelines OR brand kit OR press kit OR media kit OR style guide`,
-      { limit: 5 }
-    );
-
-    if (results.length === 0) return null;
-
-    // Score and rank results by relevance to brand guidelines
-    const scored = results
-      .map((r) => {
-        const urlLower = r.url.toLowerCase();
-        const titleLower = (r.title || "").toLowerCase();
-        const descLower = (r.description || "").toLowerCase();
-        const combined = `${urlLower} ${titleLower} ${descLower}`;
-
-        let score = 0;
-
-        // Must be from the target domain (or a closely related subdomain)
-        const domainLower = domain.toLowerCase();
-        if (!urlLower.includes(domainLower)) {
-          // Third-party brand pages (brandfetch, etc.) get a small score
-          score += 1;
-        } else {
-          score += 10;
-        }
-
-        // Score based on keyword matches
-        for (const keyword of BRAND_KIT_KEYWORDS) {
-          if (combined.includes(keyword)) score += 5;
-        }
-
-        // URL path hints
-        for (const path of BRAND_KIT_PATHS) {
-          if (urlLower.includes(path)) score += 3;
-        }
-
-        return { ...r, score };
-      })
-      .filter((r) => r.score > 5) // Must have at least some relevance
-      .sort((a, b) => b.score - a.score);
-
-    if (scored.length === 0) return null;
-
-    const best = scored[0];
-
-    // Scrape the best result page to get clean content (1 credit)
-    const scraped = await firecrawlScrape(firecrawlApiKey, best.url, {
-      formats: ["markdown"],
-      onlyMainContent: true,
-    });
-
-    const content = scraped?.markdown || best.description || "";
-    if (content.length < 50) {
-      return { url: best.url, content: "" };
-    }
-
-    return {
-      url: best.url,
-      content: content.slice(0, MAX_BODY_CONTENT),
-    };
-  } catch (err) {
-    console.warn(
-      "[discover-brand-kit] Firecrawl search failed, will fall back to URL probing:",
-      err instanceof Error ? err.message : err
-    );
-    return null;
-  }
-}
-
-// ─── Strategy 2: URL Probing (Fallback) ──────────────────────────────
+// ─── Strategy 1: Enhanced URL Probing (Free) ─────────────────────────
 
 /**
  * Perform a HEAD request to check if a URL exists (returns 200).
@@ -234,19 +173,24 @@ async function fetchPageText(url: string): Promise<string | null> {
 }
 
 /**
- * Discover brand kit by probing common URL paths.
+ * Discover brand kit by probing common URL paths and subdomains.
+ * Free — uses only fetch() HEAD requests.
  */
 async function discoverViaUrlProbe(
   domain: string
 ): Promise<{ url: string; content: string } | null> {
-  const baseUrl = domain.startsWith("http")
-    ? domain.replace(/\/+$/, "")
-    : `https://${domain}`;
+  const baseDomain = domain.replace(/^www\./, "");
+  const baseUrl = `https://${baseDomain}`;
+
+  // Build probe list: paths on main domain + subdomain roots
+  const probeTargets: string[] = [
+    ...BRAND_KIT_PATHS.map((path) => `${baseUrl}${path}`),
+    ...BRAND_SUBDOMAINS.map((sub) => `https://${sub}.${baseDomain}`),
+  ];
 
   // Run all probes concurrently
   const results = await Promise.all(
-    BRAND_KIT_PATHS.map(async (path) => {
-      const url = `${baseUrl}${path}`;
+    probeTargets.map(async (url) => {
       const exists = await probeUrl(url);
       return { url, exists };
     })
@@ -257,6 +201,79 @@ async function discoverViaUrlProbe(
 
   const content = await fetchPageText(found.url);
   return { url: found.url, content: content || "" };
+}
+
+// ─── Strategy 2: Serper.dev Google Search (Fallback) ─────────────────
+
+/**
+ * Use Serper.dev to search Google for brand guidelines pages.
+ * Cost: ~$0.001 per query.
+ */
+async function discoverViaSerperSearch(
+  domain: string,
+  serperApiKey: string
+): Promise<{ url: string; content: string } | null> {
+  try {
+    const results = await serperSearch(
+      serperApiKey,
+      `${domain} brand guidelines OR brand kit OR press kit OR media kit OR style guide`,
+      { num: 5 }
+    );
+
+    if (results.length === 0) return null;
+
+    // Score and rank results by relevance
+    const scored = results
+      .map((r) => {
+        const urlLower = r.link.toLowerCase();
+        const titleLower = (r.title || "").toLowerCase();
+        const snippetLower = (r.snippet || "").toLowerCase();
+        const combined = `${urlLower} ${titleLower} ${snippetLower}`;
+
+        let score = 0;
+
+        // Must be from the target domain (or a closely related subdomain)
+        const domainLower = domain.toLowerCase();
+        if (!urlLower.includes(domainLower)) {
+          // Third-party brand pages (brandfetch, etc.) get a small score
+          score += 1;
+        } else {
+          score += 10;
+        }
+
+        // Score based on keyword matches
+        for (const keyword of BRAND_KIT_KEYWORDS) {
+          if (combined.includes(keyword)) score += 5;
+        }
+
+        // URL path hints
+        for (const path of BRAND_KIT_PATHS) {
+          if (urlLower.includes(path)) score += 3;
+        }
+
+        return { ...r, score };
+      })
+      .filter((r) => r.score > 5)
+      .sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) return null;
+
+    const best = scored[0];
+
+    // Fetch the page content directly (no Firecrawl scrape needed)
+    const content = await fetchPageText(best.link);
+
+    return {
+      url: best.link,
+      content: content || "",
+    };
+  } catch (err) {
+    console.warn(
+      "[discover-brand-kit] Serper search failed, returning empty:",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 }
 
 // ─── LLM Guideline Extraction ────────────────────────────────────────
@@ -341,17 +358,44 @@ async function extractGuidelines(
 export async function discoverBrandKit(
   domain: string,
   openRouterApiKey: string,
-  firecrawlApiKey?: string
+  serperApiKey?: string
 ): Promise<BrandKitDiscoveryOutput> {
-  // ── Strategy 1: Firecrawl search (if API key is available) ──
-  if (firecrawlApiKey) {
-    const searchResult = await discoverViaFirecrawlSearch(
-      domain,
-      firecrawlApiKey
-    );
+  // ── Strategy 1: Enhanced URL probing (free, always first) ──
+  const probeResult = await discoverViaUrlProbe(domain);
+
+  if (probeResult) {
+    if (probeResult.content.length > 50) {
+      const { isActualBrandKit, guidelineRules } = await extractGuidelines(
+        probeResult.content,
+        probeResult.url,
+        openRouterApiKey
+      );
+
+      if (isActualBrandKit) {
+        return {
+          discoveredUrl: probeResult.url,
+          hasOfficialKit: true,
+          guidelineRules,
+          discoveryMethod: "url-probe",
+        };
+      }
+      // LLM says it's not a real brand kit — fall through to search
+    } else {
+      // Found a URL but couldn't get content
+      return {
+        discoveredUrl: probeResult.url,
+        hasOfficialKit: true,
+        guidelineRules: [],
+        discoveryMethod: "url-probe",
+      };
+    }
+  }
+
+  // ── Strategy 2: Serper.dev Google search (fallback) ──
+  if (serperApiKey) {
+    const searchResult = await discoverViaSerperSearch(domain, serperApiKey);
 
     if (searchResult) {
-      // If we got content, extract guidelines via LLM
       if (searchResult.content.length > 50) {
         const { isActualBrandKit, guidelineRules } = await extractGuidelines(
           searchResult.content,
@@ -359,59 +403,24 @@ export async function discoverBrandKit(
           openRouterApiKey
         );
 
-        if (!isActualBrandKit) {
-          // Search found a page but LLM says it's not actually a brand kit
-          // Fall through to URL probing as a second chance
-        } else {
+        if (isActualBrandKit) {
           return {
             discoveredUrl: searchResult.url,
             hasOfficialKit: true,
             guidelineRules,
-            discoveryMethod: "firecrawl-search",
+            discoveryMethod: "serper-search",
           };
         }
       } else {
-        // Found a URL but couldn't get content
         return {
           discoveredUrl: searchResult.url,
           hasOfficialKit: true,
           guidelineRules: [],
-          discoveryMethod: "firecrawl-search",
+          discoveryMethod: "serper-search",
         };
       }
     }
   }
 
-  // ── Strategy 2: URL probing (fallback) ──
-  const probeResult = await discoverViaUrlProbe(domain);
-
-  if (!probeResult) {
-    return EMPTY_RESULT;
-  }
-
-  if (!probeResult.content) {
-    return {
-      discoveredUrl: probeResult.url,
-      hasOfficialKit: true,
-      guidelineRules: [],
-      discoveryMethod: "url-probe",
-    };
-  }
-
-  const { isActualBrandKit, guidelineRules } = await extractGuidelines(
-    probeResult.content,
-    probeResult.url,
-    openRouterApiKey
-  );
-
-  if (!isActualBrandKit) {
-    return EMPTY_RESULT;
-  }
-
-  return {
-    discoveredUrl: probeResult.url,
-    hasOfficialKit: true,
-    guidelineRules,
-    discoveryMethod: "url-probe",
-  };
+  return EMPTY_RESULT;
 }

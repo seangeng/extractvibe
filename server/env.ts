@@ -21,7 +21,7 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
 
   // Optional integrations
-  FIRECRAWL_API_KEY?: string;
+  SERPER_API_KEY?: string;
 
   // Vars (set in wrangler.jsonc)
   ADMIN_USER_IDS: string;

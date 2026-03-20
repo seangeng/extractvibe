@@ -156,7 +156,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             },
             this.env.OPENROUTER_API_KEY
           ),
-          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.FIRECRAWL_API_KEY),
+          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.SERPER_API_KEY),
         ]);
 
         await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
@@ -184,45 +184,26 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           brandKit: BrandKitDiscoveryOutput;
         } | null;
 
-        // Fetch enrichment data concurrently (LoadLogo + optional Firecrawl map)
-        const [loadLogoData, siteMapUrls] = await Promise.all([
-          // LoadLogo: clean logo + brand name
-          (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
-            try {
-              const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
-                headers: { "Accept": "application/json" },
-                signal: AbortSignal.timeout(5000),
-              });
-              if (!llRes.ok) return null;
-              const llJson = (await llRes.json()) as Record<string, unknown>;
-              return {
-                logo: (llJson.logo as string) || undefined,
-                favicon: (llJson.favicon as string) || undefined,
-                name: (llJson.name as string) || undefined,
-              };
-            } catch { return null; }
-          })(),
-
-          // Firecrawl map: discover site structure (1 credit, optional)
-          (async (): Promise<string[]> => {
-            if (!this.env.FIRECRAWL_API_KEY) return [];
-            try {
-              const { firecrawlMap } = await import("../lib/firecrawl");
-              return await firecrawlMap(this.env.FIRECRAWL_API_KEY, `https://${domain}`, {
-                limit: 50,
-              });
-            } catch { return []; }
-          })(),
-        ]);
+        // Fetch enrichment data (LoadLogo: clean logo + brand name)
+        const loadLogoData = await (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
+          try {
+            const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
+              headers: { "Accept": "application/json" },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (!llRes.ok) return null;
+            const llJson = (await llRes.json()) as Record<string, unknown>;
+            return {
+              logo: (llJson.logo as string) || undefined,
+              favicon: (llJson.favicon as string) || undefined,
+              name: (llJson.name as string) || undefined,
+            };
+          } catch { return null; }
+        })();
 
         const kit = createEmptyBrandKit(url);
         kit.meta.durationMs = Date.now() - startTime;
         kit.meta.extractionDepth = 1;
-
-        // Enrich with site structure from Firecrawl map
-        if (siteMapUrls.length > 0) {
-          kit.meta.sitePageCount = siteMapUrls.length;
-        }
 
         if (visualData) {
           kit.identity = { ...visualData.identity, archetypes: vibeData?.vibe?.archetypes || [] };
