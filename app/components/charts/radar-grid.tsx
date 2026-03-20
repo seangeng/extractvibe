@@ -24,7 +24,7 @@ export function RadarGrid({
   showLabels = true,
   className = "",
 }: RadarGridProps) {
-  const { metrics, radius, levels, animate } = useRadar();
+  const { metrics, radius, levels, animate, getAngle } = useRadar();
 
   // Generate angles for the radial lines (one per metric)
   const degrees = 360;
@@ -47,7 +47,31 @@ export function RadarGrid({
 
   return (
     <g className={className}>
-      {/* Concentric grid circles */}
+      {/* Axis spoke lines from center to each vertex */}
+      {metrics.map((metric, i) => {
+        const angle = getAngle(i);
+        const x = radius * Math.cos(angle);
+        const y = radius * Math.sin(angle);
+        return (
+          <motion.line
+            animate={{ opacity: 0.3 }}
+            initial={animate ? { opacity: 0 } : { opacity: 0.3 }}
+            key={`spoke-${metric.key}`}
+            x1={0}
+            y1={0}
+            x2={x}
+            y2={y}
+            stroke={radarCssVars.grid}
+            strokeWidth={1}
+            transition={{
+              duration: 0.4,
+              delay: animate ? gridBaseDelay + i * 0.05 : 0,
+            }}
+          />
+        );
+      })}
+
+      {/* Concentric grid polygons */}
       {[...new Array(levels)].map((_, i) => {
         const targetRadius = ((i + 1) * radius) / levels;
         return (
@@ -69,9 +93,9 @@ export function RadarGrid({
               data={angles}
               fill="none"
               radius={targetRadius}
-              stroke={radarCssVars.border}
+              stroke={radarCssVars.grid}
               strokeLinecap="round"
-              strokeOpacity={0.6}
+              strokeOpacity={0.8}
               strokeWidth={1}
             />
           </motion.g>

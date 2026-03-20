@@ -35,7 +35,7 @@ export function RadarAreaStatic({
       <path
         d={pathD}
         fill={color}
-        fillOpacity={0.15}
+        fillOpacity={0.12}
         stroke={color}
         strokeWidth={2}
         strokeLinejoin="round"
@@ -45,10 +45,10 @@ export function RadarAreaStatic({
           key={i}
           cx={point.x}
           cy={point.y}
-          r={3.5}
+          r={4}
           fill={color}
-          stroke="white"
-          strokeWidth={1.5}
+          stroke="var(--chart-background, white)"
+          strokeWidth={2}
         />
       ))}
     </g>

@@ -45,7 +45,7 @@ export default function PersonalityRadarChart({ spectrum }: { spectrum: ToneSpec
   ];
 
   return (
-    <RadarChart data={data} metrics={metrics} size={280} levels={4} margin={55}>
+    <RadarChart data={data} metrics={metrics} levels={4} margin={55}>
       <RadarGrid />
       <RadarLabels />
       <RadarAreaStatic />

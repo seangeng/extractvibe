@@ -104,12 +104,12 @@ function PersonalityRadar({ spectrum }: { spectrum: ToneSpectrum }) {
   const [mounted, setMounted] = useState(false);
   const [hasError, setHasError] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted || hasError) return <div className="h-[280px] w-[280px]" />;
+  if (!mounted || hasError) return <div className="aspect-square w-full max-w-[280px]" />;
 
   return (
     <ErrorCatcher onError={() => setHasError(true)}>
-      <Suspense fallback={<div className="h-[280px] w-[280px]" />}>
-        <div className="h-[280px] w-[280px]">
+      <Suspense fallback={<div className="aspect-square w-full max-w-[280px]" />}>
+        <div className="aspect-square w-full max-w-[280px]">
           <LazyPersonalityRadar spectrum={spectrum} />
         </div>
       </Suspense>
@@ -181,25 +181,27 @@ function ColorStrip({
           {label}
         </p>
       )}
-      <div className="flex overflow-hidden rounded-xl border border-[hsl(var(--border))]">
-        {colors.map(({ key, color }) => (
-          <div key={key} className="min-w-[60px] flex-1">
-            <div
-              className="h-24 w-full border-r border-[hsl(var(--border))]/30 last:border-r-0"
-              style={{ backgroundColor: color.hex || "#000000" }}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="flex">
-        {colors.map(({ key, color }) => (
-          <div key={key} className="min-w-[60px] flex-1 text-center">
-            <p className="font-mono text-[11px] font-medium">{color.hex}</p>
-            <p className="text-[10px] capitalize text-[hsl(var(--muted-foreground))]">
-              {color.role || key}
-            </p>
-          </div>
-        ))}
+      <div className="scrollbar-none overflow-x-auto">
+        <div className="flex min-w-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]" style={{ minWidth: `${colors.length * 60}px` }}>
+          {colors.map(({ key, color }) => (
+            <div key={key} className="min-w-[60px] flex-1">
+              <div
+                className="h-24 w-full border-r border-[hsl(var(--border))]/30 last:border-r-0"
+                style={{ backgroundColor: color.hex || "#000000" }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex" style={{ minWidth: `${colors.length * 60}px` }}>
+          {colors.map(({ key, color }) => (
+            <div key={key} className="min-w-[60px] flex-1 text-center">
+              <p className="font-mono text-[11px] font-medium">{color.hex}</p>
+              <p className="text-[10px] capitalize text-[hsl(var(--muted-foreground))]">
+                {color.role || key}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -291,9 +293,9 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
       {entries.map(([level, entry]) => (
         <div
           key={level}
-          className="flex items-center gap-4 rounded-xl border border-[hsl(var(--border))] px-4 py-3"
+          className="flex items-center gap-3 overflow-hidden rounded-xl border border-[hsl(var(--border))] px-3 py-3 sm:gap-4 sm:px-4"
         >
-          <Badge variant="outline" className="w-16 justify-center font-mono text-xs">
+          <Badge variant="outline" className="w-14 shrink-0 justify-center font-mono text-xs sm:w-16">
             {level}
           </Badge>
           <p
@@ -616,10 +618,10 @@ export default function PublicBrandPage({
 
                 {/* Radar chart on subtle background */}
                 <div className="mt-10 flex justify-center">
-                  <div className="relative rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-8 md:p-12">
+                  <div className="relative w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-6 sm:p-8 md:p-12">
                     {/* Subtle radial glow behind the chart */}
                     <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,hsl(var(--muted))_0%,transparent_70%)]" />
-                    <div className="relative">
+                    <div className="relative flex justify-center">
                       <PersonalityRadar spectrum={toneSpectrum} />
                     </div>
                   </div>

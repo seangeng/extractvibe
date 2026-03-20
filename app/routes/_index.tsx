@@ -377,12 +377,12 @@ export default function LandingPage() {
             <p className="mb-5 text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
               Recently extracted
             </p>
-            <div className="flex justify-center gap-4">
+            <div className="scrollbar-none flex justify-center gap-4 overflow-x-auto pb-2">
               {recentlyExtracted.map((brand) => (
                 <Link
                   key={brand.domain}
                   to={`/brand/${brand.domain}`}
-                  className="group flex w-40 flex-col items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-4 transition-all duration-200 hover:border-[hsl(var(--foreground))]/20 hover:bg-[hsl(var(--muted))]/50"
+                  className="group flex w-32 shrink-0 flex-col items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-3 transition-all duration-200 hover:border-[hsl(var(--foreground))]/20 hover:bg-[hsl(var(--muted))]/50 sm:w-40 sm:p-4"
                 >
                   <img
                     src={brand.logo}
