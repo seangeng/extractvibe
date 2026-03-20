@@ -54,8 +54,8 @@ export function RadarGrid({
         const y = radius * Math.sin(angle);
         return (
           <motion.line
-            animate={{ opacity: 0.3 }}
-            initial={animate ? { opacity: 0 } : { opacity: 0.3 }}
+            animate={{ opacity: 1 }}
+            initial={animate ? { opacity: 0 } : { opacity: 1 }}
             key={`spoke-${metric.key}`}
             x1={0}
             y1={0}
@@ -95,7 +95,7 @@ export function RadarGrid({
               radius={targetRadius}
               stroke={radarCssVars.grid}
               strokeLinecap="round"
-              strokeOpacity={0.8}
+              strokeOpacity={1}
               strokeWidth={1}
             />
           </motion.g>

@@ -27,7 +27,7 @@ export function RadarAxis({ className = "" }: RadarAxisProps) {
             initial={animate ? { x2: 0, y2: 0 } : { x2: targetX, y2: targetY }}
             key={`axis-${metric.key}`}
             stroke={radarCssVars.border}
-            strokeOpacity={0.6}
+            strokeOpacity={1}
             strokeWidth={1}
             transition={{
               type: "spring",
