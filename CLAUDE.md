@@ -11,7 +11,7 @@
 - **Domain**: extractvibe.com
 - **One-liner**: Open-source brand intelligence engine that extracts comprehensive brand kits (logos, colors, typography, voice, personality, rules) from any website.
 - **Status**: building (Phase 0 — scaffold)
-- **Last updated**: 2026-03-16
+- **Last updated**: 2026-03-20
 
 ---
 
@@ -121,8 +121,11 @@ extractvibe/
 |---|---|---|---|---|
 | GET,POST | `/api/auth/**` | Better Auth | None | Auth flow (sign-in, sign-up, session, etc.) |
 | GET | `/api/health` | Inline | None | Health check `{ ok, version, timestamp }` |
-| GET | `/robots.txt` | Inline | None | Dynamic robots.txt |
-| GET | `/sitemap.xml` | Inline | None | Dynamic sitemap |
+| GET | `/robots.txt` | Inline | None | Dynamic robots.txt with AI crawler directives |
+| GET | `/sitemap.xml` | Inline | None | Dynamic sitemap (static pages + brands + docs) |
+| GET | `/docs/:file` | Inline | None | Markdown API docs (11 pages) |
+| GET | `/llms-full.txt` | Inline | None | Complete API docs in one file |
+| GET | `/.well-known/openapi.json` | Redirect | None | Redirects to `/api/openapi.json` |
 | * | `*` (catch-all) | React Router SSR | None | All page routes |
 
 ### API sub-router (in `server/api/index.ts`)
@@ -130,9 +133,15 @@ extractvibe/
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/api/health` | None | Health check (also mounted on sub-router) |
+| GET | `/api` | None | API index with endpoint listing |
+| GET | `/api/openapi.json` | None | OpenAPI 3.1 spec (cached 1h) |
+| POST | `/api/agent/bootstrap` | None (IP rate-limited) | LLM/agent self-provisioning: creates account + API key (5 credits) |
 | POST | `/api/extract` | Session/API key | Start extraction job. Deducts 1 credit. Returns `{ jobId }` (202) |
 | GET | `/api/extract/:jobId` | Session/API key | Poll job status from Workflow |
 | GET | `/api/extract/:jobId/result` | Session/API key | Get cached extraction result from KV |
+| GET | `/api/extract/:jobId/export/:format` | Session/API key | Export brand kit (json, css, tailwind, markdown, tokens) |
+| GET | `/api/extract/history` | Session/API key | Extraction history for authenticated user |
+| GET | `/api/brand/:domain` | Optional | Cached brand kit lookup by domain |
 | GET | `/api/credits` | Session/API key | Get user credit balance |
 | POST | `/api/keys` | Session/API key | Create new API key |
 | GET | `/api/keys` | Session/API key | List active (non-revoked) API keys |
@@ -255,6 +264,10 @@ const result = await openRouterCompletion(env.OPENROUTER_API_KEY, messages, {
 | 2026-03-16 | Single Worker entry via `workers/app.ts` | Hono app mounts API + auth + SEO routes, then React Router SSR catch-all. Durable Objects and Workflows re-exported from this file. |
 | 2026-03-16 | Config-based routing in `app/routes.ts` | Explicit route tree with layout nesting for dashboard. More control than file-based convention. |
 | 2026-03-16 | Credit system: 5 free extractions, monthly reset | Low barrier to try, cron resets at `0 0 1 * *` |
+| 2026-03-20 | Serper.dev replaces Firecrawl for brand kit discovery | ~$0.001/query vs $1.50. URL probing (free) runs first; Serper only as fallback |
+| 2026-03-20 | Agent bootstrap endpoint for LLM self-provisioning | AI agents can get API keys without human interaction. 5 credits, 30-day expiry unless claimed |
+| 2026-03-20 | API docs served as markdown at `/docs/*.md` | Optimized for both human developers (interactive /docs page) and LLMs (raw .md files) |
+| 2026-03-20 | Skip ai-plugin.json (dead standard) | OpenAI deprecated plugins in 2024. Invest in MCP + OpenAPI + llms.txt instead |
 
 ---
 
@@ -267,7 +280,12 @@ const result = await openRouterCompletion(env.OPENROUTER_API_KEY, messages, {
 - [x] Better Auth with D1 Kysely dialect (transactions disabled)
 - [x] Auth middleware (session + API key resolution)
 - [x] AI client wrappers (OpenRouter + Cloudflare Workers AI)
-- [x] API routes: extract (start/poll/result), credits, API keys CRUD
+- [x] API routes: extract (start/poll/result/export), credits, API keys CRUD, agent bootstrap
+- [x] Agent bootstrap endpoint (`POST /api/agent/bootstrap`) for LLM self-provisioning
+- [x] Comprehensive markdown API docs served at `/docs/*.md` (11 pages)
+- [x] `llms-full.txt` — complete API reference in one file
+- [x] AI/SEO: robots.txt with 12 AI crawler directives, link discovery tags, .well-known/openapi.json
+- [x] Serper.dev integration replacing Firecrawl for brand kit discovery (~$0.001/query vs $1.50)
 - [x] React Router v7 SSR config with `@cloudflare/vite-plugin`
 - [x] Root layout with Inter font, Tailwind v4, error boundary
 - [x] Route config (`app/routes.ts`) with dashboard layout nesting
@@ -306,3 +324,15 @@ const result = await openRouterCompletion(env.OPENROUTER_API_KEY, messages, {
 - Set up frontend skeleton: root layout, route config, shadcn/ui components, auth/api clients
 - Key decision: SSR over SPA, Workers AI primary + OpenRouter fallback, Workflow-based extraction pipeline
 - What's next: Create route page components (landing, auth, dashboard pages), wire infrastructure (create D1/KV/R2 resources), verify end-to-end auth flow
+
+### 2026-03-20 — API docs, agent bootstrap, AI/SEO optimization
+- Replaced Firecrawl with Serper.dev + enhanced URL probing (30 paths + 4 subdomains) for brand kit discovery. Cost: ~$0.001/query vs $1.50.
+- Added `POST /api/agent/bootstrap` — LLMs self-provision API keys (5 credits, 30-day claim URL)
+- Created 11 markdown API doc pages served at `/docs/*.md` with cURL/JS/Python examples
+- Added `/llms-full.txt` — complete API reference in one file (~58KB)
+- Rewrote `llms.txt` to follow the llms.txt spec with structured section links
+- Updated `robots.txt` with explicit Allow for 12 AI crawlers
+- Added `<link rel="alternate">` discovery tags for llms.txt, llms-full.txt, OpenAPI in root layout
+- Added `/.well-known/openapi.json` redirect, doc pages in sitemap.xml
+- Key decisions: Serper.dev over Firecrawl (1500x cheaper), URL probing first (free), agent bootstrap for LLM-first API access
+- What's next: MCP server (Phase 2-3), x402 micropayments (Phase 4), OAuth 2.1 for MCP auth

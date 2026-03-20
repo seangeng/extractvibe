@@ -1042,7 +1042,106 @@ print(res.json()["ok"])  # True`,
     ],
   },
 
-  // 12. OpenAPI spec
+  // 12. Agent bootstrap
+  {
+    method: "POST",
+    path: "/api/agent/bootstrap",
+    slug: "agent-bootstrap",
+    title: "Agent bootstrap",
+    description:
+      "Lets AI agents and LLMs self-provision an API key without human interaction. Returns a working API key with 5 free credits and a claim URL that a human can use to link the account. Rate limited to 3 requests per IP per day.",
+    auth: "none",
+    rateLimit: "3 per IP per day",
+    requestBody: JSON.stringify(
+      {
+        agent_name: "my-research-agent",
+        contact_email: "optional@email.com",
+      },
+      null,
+      2
+    ),
+    params: [
+      {
+        name: "agent_name",
+        type: "string",
+        required: true,
+        description:
+          "Name for the agent account (1-64 chars, alphanumeric and hyphens)",
+      },
+      {
+        name: "contact_email",
+        type: "string",
+        required: false,
+        description:
+          "Optional contact email for the account owner",
+      },
+    ],
+    responses: [
+      {
+        status: 201,
+        description: "API key created",
+        body: JSON.stringify(
+          {
+            api_key: "ev_a1b2c3d4e5f6...",
+            credits: 5,
+            claim_url: "https://extractvibe.com/claim/abc123def456...",
+            claim_instructions:
+              "Give this URL to a human to link this API key to their account. The key works immediately but expires in 30 days unless claimed.",
+            docs_url: "https://extractvibe.com/docs",
+            expires_at: "2026-04-20T00:00:00.000Z",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        status: 429,
+        description: "Rate limit exceeded (max 3 per day per IP)",
+        body: JSON.stringify(
+          { error: "Agent bootstrap rate limit exceeded. Max 3 per day per IP." },
+          null,
+          2
+        ),
+      },
+    ],
+    codeExamples: [
+      {
+        language: "bash",
+        label: "cURL",
+        code: `curl -X POST https://extractvibe.com/api/agent/bootstrap \\
+  -H "Content-Type: application/json" \\
+  -d '{"agent_name": "my-research-agent"}'`,
+      },
+      {
+        language: "javascript",
+        label: "JavaScript",
+        code: `const res = await fetch("https://extractvibe.com/api/agent/bootstrap", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ agent_name: "my-research-agent" }),
+});
+
+const { api_key, claim_url } = await res.json();
+console.log("API Key:", api_key);
+console.log("Claim URL:", claim_url);`,
+      },
+      {
+        language: "python",
+        label: "Python",
+        code: `import requests
+
+res = requests.post(
+    "https://extractvibe.com/api/agent/bootstrap",
+    json={"agent_name": "my-research-agent"},
+)
+data = res.json()
+print("API Key:", data["api_key"])
+print("Claim URL:", data["claim_url"])`,
+      },
+    ],
+  },
+
+  // 13. OpenAPI spec
   {
     method: "GET",
     path: "/api/openapi.json",
@@ -1138,6 +1237,7 @@ export const sidebarSections = [
       { label: "Create API key", href: "#keys-create" },
       { label: "List API keys", href: "#keys-list" },
       { label: "Revoke API key", href: "#keys-revoke" },
+      { label: "Agent bootstrap", href: "#agent-bootstrap" },
       { label: "OpenAPI spec", href: "#openapi" },
     ],
   },
