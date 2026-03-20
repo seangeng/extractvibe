@@ -172,12 +172,12 @@ function EndpointSection({ endpoint }: { endpoint: EndpointDoc }) {
       {endpoint.pathParams && endpoint.pathParams.length > 0 && (
         <div className="mt-6">
           <p className="mb-2 text-sm font-medium">Path parameters</p>
-          <div className="overflow-hidden rounded-lg border border-[hsl(var(--border))]">
+          <div className="overflow-x-auto rounded-lg border border-[hsl(var(--border))]">
             <table className="w-full text-sm">
               <tbody>
                 {endpoint.pathParams.map((param) => (
                   <tr key={param.name} className="border-b border-[hsl(var(--border))] last:border-b-0">
-                    <td className="px-4 py-2.5 font-mono text-xs font-medium">
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs font-medium">
                       {param.name}
                     </td>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">
@@ -259,7 +259,7 @@ export default function DocsPage() {
     <div className="min-h-screen bg-[hsl(var(--background))]">
       {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-6">
             <Link to="/" className="flex items-center gap-2.5">
               <img
@@ -309,8 +309,8 @@ export default function DocsPage() {
       )}
 
       {/* Layout */}
-      <div className="mx-auto max-w-7xl px-6 pt-20">
-        <div className="flex gap-10">
+      <div className="mx-auto max-w-7xl px-4 pt-20 sm:px-6">
+        <div className="flex gap-0 lg:gap-10">
           {/* Sidebar — desktop: sticky, mobile: slide-over */}
           <aside
             className={cn(
@@ -327,7 +327,7 @@ export default function DocsPage() {
           </aside>
 
           {/* Main content */}
-          <main className="min-w-0 max-w-3xl flex-1 py-8 lg:pl-4">
+          <main className="min-w-0 max-w-3xl flex-1 py-8">
             {/* Introduction */}
             <section id="introduction" className="scroll-mt-24 pb-16">
               <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">

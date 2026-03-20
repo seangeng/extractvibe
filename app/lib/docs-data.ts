@@ -1052,30 +1052,18 @@ print(res.json()["ok"])  # True`,
       "Lets AI agents and LLMs self-provision an API key without human interaction. Returns a working API key with 5 free credits and a claim URL that a human can use to link the account. Rate limited to 3 requests per IP per day.",
     auth: "none",
     rateLimit: "3 per IP per day",
-    requestBody: JSON.stringify(
-      {
-        agent_name: "my-research-agent",
-        contact_email: "optional@email.com",
-      },
-      null,
-      2
-    ),
-    params: [
-      {
-        name: "agent_name",
-        type: "string",
-        required: true,
-        description:
-          "Name for the agent account (1-64 chars, alphanumeric and hyphens)",
-      },
-      {
-        name: "contact_email",
-        type: "string",
-        required: false,
-        description:
-          "Optional contact email for the account owner",
-      },
-    ],
+    requestBody: {
+      description:
+        "Agent name is required (1-64 chars, alphanumeric and hyphens). Contact email is optional.",
+      example: JSON.stringify(
+        {
+          agent_name: "my-research-agent",
+          contact_email: "optional@email.com",
+        },
+        null,
+        2
+      ),
+    },
     responses: [
       {
         status: 201,
