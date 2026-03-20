@@ -4,6 +4,20 @@ import { createRequestHandler } from "react-router";
 import type { Env } from "../server/env";
 import { createAuth } from "../server/lib/auth";
 import { apiRouter } from "../server/api";
+import {
+  getQuickstartMd,
+  getAuthenticationMd,
+  getExtractMd,
+  getExportMd,
+  getBrandMd,
+  getCreditsMd,
+  getKeysMd,
+  getAgentBootstrapMd,
+  getRateLimitsMd,
+  getErrorsMd,
+  getBrandKitSchemaMd,
+  getFullDocsMd,
+} from "../server/lib/docs-markdown";
 
 export { ExtractBrandWorkflow } from "../server/workflows/extract-brand";
 export { JobProgressDO } from "../server/durable-objects/job-progress";
@@ -76,12 +90,50 @@ app.route("/api", apiRouter);
 app.get("/robots.txt", (c) => {
   const body = [
     "User-agent: *",
-    "Disallow: /api/",
+    "Allow: /",
     "Disallow: /dashboard/",
+    "Disallow: /api/auth/",
+    "",
+    "User-agent: GPTBot",
+    "Allow: /",
+    "User-agent: ChatGPT-User",
+    "Allow: /",
+    "User-agent: Claude-Web",
+    "Allow: /",
+    "User-agent: ClaudeBot",
+    "Allow: /",
+    "User-agent: Anthropic-AI",
+    "Allow: /",
+    "User-agent: PerplexityBot",
+    "Allow: /",
+    "User-agent: Google-Extended",
+    "Allow: /",
+    "User-agent: Applebot-Extended",
+    "Allow: /",
+    "User-agent: meta-externalagent",
+    "Allow: /",
+    "User-agent: Bytespider",
+    "Allow: /",
+    "User-agent: CCBot",
+    "Allow: /",
+    "User-agent: Amazonbot",
+    "Allow: /",
     "",
     "Sitemap: https://extractvibe.com/sitemap.xml",
+    "",
+    "# AI/LLM content discovery",
+    "# Site summary: https://extractvibe.com/llms.txt",
+    "# Full documentation: https://extractvibe.com/llms-full.txt",
+    "# OpenAPI spec: https://extractvibe.com/api/openapi.json",
   ].join("\n");
   return c.text(body, 200, { "Content-Type": "text/plain" });
+});
+
+// ---------------------------------------------------------------------------
+// .well-known — OpenAPI discovery
+// ---------------------------------------------------------------------------
+app.get("/.well-known/openapi.json", (c) => {
+  return c.redirect("/api/openapi.json", 301);
 });
 
 // ---------------------------------------------------------------------------
@@ -125,6 +177,18 @@ app.get("/sitemap.xml", async (c) => {
     { loc: "/ai", changefreq: "monthly", priority: "0.8" },
     { loc: "/ai/brand-voice-analysis", changefreq: "monthly", priority: "0.7" },
     { loc: "/ai/vibe-synthesis", changefreq: "monthly", priority: "0.7" },
+    // Documentation
+    { loc: "/docs/quickstart.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/authentication.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/extract.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/export.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/brand.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/credits.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/keys.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/agent-bootstrap.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/rate-limits.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/errors.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/schema.md", changefreq: "weekly", priority: "0.7" },
   ];
 
   // Dynamic brand pages — get all unique domains with completed extractions
@@ -160,6 +224,43 @@ ${urls.join("\n")}
   await c.env.CACHE.put("sitemap:xml", xml, { expirationTtl: 3600 });
 
   return c.body(xml, 200, { "Content-Type": "application/xml" });
+});
+
+// ---------------------------------------------------------------------------
+// Markdown API documentation — served as raw .md files
+// ---------------------------------------------------------------------------
+const docsRoutes: Record<string, () => string> = {
+  "quickstart.md": getQuickstartMd,
+  "authentication.md": getAuthenticationMd,
+  "extract.md": getExtractMd,
+  "export.md": getExportMd,
+  "brand.md": getBrandMd,
+  "credits.md": getCreditsMd,
+  "keys.md": getKeysMd,
+  "agent-bootstrap.md": getAgentBootstrapMd,
+  "rate-limits.md": getRateLimitsMd,
+  "errors.md": getErrorsMd,
+  "schema.md": getBrandKitSchemaMd,
+};
+
+app.get("/docs/:file", (c) => {
+  const file = c.req.param("file");
+  const generator = docsRoutes[file];
+  if (!generator) {
+    return c.notFound();
+  }
+  return c.body(generator(), 200, {
+    "Content-Type": "text/markdown; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
+});
+
+// llms-full.txt — complete API documentation in one file
+app.get("/llms-full.txt", (c) => {
+  return c.body(getFullDocsMd(), 200, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
 });
 
 // ---------------------------------------------------------------------------

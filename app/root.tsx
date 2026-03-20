@@ -21,6 +21,24 @@ export const links: LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap",
   },
   { rel: "icon", type: "image/svg+xml", href: "/extract-vibe-logo.svg" },
+  {
+    rel: "alternate",
+    type: "text/plain",
+    href: "https://extractvibe.com/llms.txt",
+    title: "LLM-friendly site summary",
+  },
+  {
+    rel: "alternate",
+    type: "text/plain",
+    href: "https://extractvibe.com/llms-full.txt",
+    title: "Complete API documentation",
+  },
+  {
+    rel: "alternate",
+    type: "application/json",
+    href: "https://extractvibe.com/api/openapi.json",
+    title: "OpenAPI specification",
+  },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

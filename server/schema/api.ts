@@ -106,6 +106,29 @@ export const HistoryResponse = z.object({
   extractions: z.array(HistoryItem),
 });
 
+// ─── Agent Bootstrap ────────────────────────────────────────────────
+
+export const AgentBootstrapRequest = z.object({
+  agent_name: z
+    .string()
+    .min(1, "agent_name is required")
+    .max(64, "agent_name must be 64 characters or fewer")
+    .regex(
+      /^[a-zA-Z0-9-]+$/,
+      "agent_name must be alphanumeric with hyphens only"
+    ),
+  contact_email: z.string().email().optional(),
+});
+
+export const AgentBootstrapResponse = z.object({
+  api_key: z.string(),
+  credits: z.number(),
+  claim_url: z.string(),
+  claim_instructions: z.string(),
+  docs_url: z.string(),
+  expires_at: z.string(),
+});
+
 // ─── Export Format ──────────────────────────────────────────────────
 
 export const ExportFormat = z.enum(["json", "css", "tailwind", "markdown", "tokens"]);
