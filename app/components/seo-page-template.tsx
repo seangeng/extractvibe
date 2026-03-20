@@ -196,7 +196,7 @@ export function SeoPageTemplate({ data }: { data: SeoPageData }) {
             <p className="mb-10 text-xs font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
               Related
             </p>
-            <div className="scrollbar-none -mx-2 flex gap-4 overflow-x-auto pb-4">
+            <div className="scrollbar-none flex gap-4 overflow-x-auto pb-4">
               {data.relatedPages.map((page) => (
                 <Link
                   key={page.href}

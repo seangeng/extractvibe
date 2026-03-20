@@ -314,7 +314,7 @@ export default function DocsPage() {
           {/* Sidebar — desktop: sticky, mobile: slide-over */}
           <aside
             className={cn(
-              "fixed top-[65px] z-40 h-[calc(100vh-65px)] w-[260px] shrink-0 overflow-y-auto border-r border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-8 transition-transform lg:sticky lg:z-0 lg:translate-x-0 lg:border-r-0 lg:bg-transparent lg:px-0",
+              "fixed top-[65px] z-40 h-[calc(100vh-65px)] w-[260px] shrink-0 overflow-y-auto bg-[hsl(var(--background))] px-4 py-8 transition-transform lg:sticky lg:z-0 lg:translate-x-0 lg:bg-transparent lg:px-0",
               sidebarOpen
                 ? "left-0 translate-x-0"
                 : "-translate-x-full lg:translate-x-0"
@@ -443,7 +443,7 @@ fetch("/api/credits", { credentials: "include" });`}
                 .
               </p>
 
-              <div className="mt-8 overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+              <div className="mt-8 overflow-x-auto rounded-xl border border-[hsl(var(--border))]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
@@ -501,7 +501,7 @@ fetch("/api/credits", { credentials: "include" });`}
                 field describing the problem.
               </p>
 
-              <div className="mt-8 overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+              <div className="mt-8 overflow-x-auto rounded-xl border border-[hsl(var(--border))]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]">

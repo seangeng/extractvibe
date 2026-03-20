@@ -73,7 +73,9 @@
     border-color: hsl(var(--border));
   }
 
+  html,
   body {
+    overflow-x: hidden;
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
