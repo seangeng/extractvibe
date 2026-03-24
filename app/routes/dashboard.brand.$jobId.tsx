@@ -643,7 +643,7 @@ export default function BrandKitPage() {
 
           {/* Summary */}
           {vibe.summary && (
-            <p className="max-w-2xl text-lg italic leading-relaxed text-[hsl(var(--muted-foreground))]">
+            <p className="max-w-2xl text-lg leading-relaxed text-[hsl(var(--muted-foreground))]">
               &ldquo;{vibe.summary}&rdquo;
             </p>
           )}
@@ -771,7 +771,7 @@ export default function BrandKitPage() {
                 <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                   Tagline
                 </p>
-                <p className="mt-0.5 text-sm italic text-[hsl(var(--foreground))]">
+                <p className="mt-0.5 text-sm text-[hsl(var(--foreground))]">
                   &ldquo;{identity.tagline}&rdquo;
                 </p>
               </div>
@@ -1327,12 +1327,12 @@ export default function BrandKitPage() {
               </h4>
               <div className="space-y-2">
                 {voice.sampleCopy.map((sample, idx) => (
-                  <blockquote
+                  <p
                     key={idx}
-                    className="rounded-xl border-l-4 border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40 py-3 pl-4 pr-3 text-sm italic leading-relaxed text-[hsl(var(--foreground))]"
+                    className="text-sm leading-relaxed text-[hsl(var(--muted-foreground))]"
                   >
                     &ldquo;{sample}&rdquo;
-                  </blockquote>
+                  </p>
                 ))}
               </div>
             </div>

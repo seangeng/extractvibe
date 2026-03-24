@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
-import { Globe, CheckCircle2, XCircle, Code2 } from "lucide-react";
+import { Globe, Check, X, Code2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
@@ -509,11 +509,11 @@ export default function PublicBrandPage({
             {domain}
           </a>
 
-          {/* Vibe summary as pull quote */}
+          {/* Vibe summary */}
           {vibe?.summary && (
-            <blockquote className="mt-8 max-w-prose border-l-2 border-[hsl(var(--foreground))] pl-5 text-lg italic leading-relaxed text-[hsl(var(--muted-foreground))] md:text-xl">
-              {vibe.summary}
-            </blockquote>
+            <p className="mt-8 max-w-prose text-lg leading-relaxed text-[hsl(var(--muted-foreground))] md:text-xl">
+              &ldquo;{vibe.summary}&rdquo;
+            </p>
           )}
 
           {/* Tags */}
@@ -719,12 +719,10 @@ export default function PublicBrandPage({
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Personality</h2>
 
-                {/* Radar chart on subtle background */}
+                {/* Radar chart */}
                 <div className="mt-10 flex justify-center">
-                  <div className="relative w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4 sm:p-6 md:p-10">
-                    {/* Subtle radial glow behind the chart */}
-                    <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,hsl(var(--muted))_0%,transparent_70%)]" />
-                    <div className="relative flex justify-center">
+                  <div className="w-full max-w-sm rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-6 md:p-10">
+                    <div className="flex justify-center">
                       <PersonalityRadar spectrum={toneSpectrum} />
                     </div>
                   </div>
@@ -827,13 +825,14 @@ export default function PublicBrandPage({
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--success))]">
                         Do
                       </h4>
-                      <ul className="space-y-5">
+                      <ul className="space-y-4">
                         {rules.dos.map((rule: string, i: number) => (
                           <li
                             key={i}
-                            className="border-l-2 border-[hsl(var(--success))] pl-4 text-sm leading-relaxed"
+                            className="flex items-start gap-3"
                           >
-                            {rule}
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--success))]" />
+                            <span className="text-sm leading-relaxed">{rule}</span>
                           </li>
                         ))}
                       </ul>
@@ -845,13 +844,14 @@ export default function PublicBrandPage({
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--destructive))]">
                         Don&apos;t
                       </h4>
-                      <ul className="space-y-5">
+                      <ul className="space-y-4">
                         {rules.donts.map((rule: string, i: number) => (
                           <li
                             key={i}
-                            className="border-l-2 border-[hsl(var(--destructive))] pl-4 text-sm leading-relaxed"
+                            className="flex items-start gap-3"
                           >
-                            {rule}
+                            <X className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--destructive))]" />
+                            <span className="text-sm leading-relaxed">{rule}</span>
                           </li>
                         ))}
                       </ul>
