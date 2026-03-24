@@ -81,7 +81,7 @@ function ColorDonut({ colors }: { colors: { key: string; color: ColorValue }[] }
   const [mounted, setMounted] = useState(false);
   const [hasError, setHasError] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted || hasError) return <div className="h-[180px] w-[180px]" />;
+  if (!mounted || hasError) return <div className="aspect-square w-full max-w-[180px]" />;
 
   const unique = colors.filter((c, i, arr) => {
     if (!c.color.hex) return false;
@@ -89,11 +89,13 @@ function ColorDonut({ colors }: { colors: { key: string; color: ColorValue }[] }
   });
   if (unique.length === 0) return null;
 
+  const ariaLabel = `Color palette: ${unique.map((c) => c.color.hex).join(", ")}`;
+
   return (
     <ErrorCatcher onError={() => setHasError(true)}>
-      <Suspense fallback={<div className="h-[180px] w-[180px]" />}>
-        <div className="h-[180px] w-[180px]">
-          <LazyColorDonut colors={unique} />
+      <Suspense fallback={<div className="aspect-square w-full max-w-[180px]" />}>
+        <div className="aspect-square w-full max-w-[180px]">
+          <LazyColorDonut colors={unique} ariaLabel={ariaLabel} />
         </div>
       </Suspense>
     </ErrorCatcher>
@@ -106,11 +108,19 @@ function PersonalityRadar({ spectrum }: { spectrum: ToneSpectrum }) {
   useEffect(() => setMounted(true), []);
   if (!mounted || hasError) return <div className="aspect-square w-full max-w-[280px]" />;
 
+  const traits: string[] = [];
+  if (spectrum.formalCasual != null) traits.push(`Casual ${spectrum.formalCasual}`);
+  if (spectrum.playfulSerious != null) traits.push(`Serious ${spectrum.playfulSerious}`);
+  if (spectrum.enthusiasticMatterOfFact != null) traits.push(`Direct ${spectrum.enthusiasticMatterOfFact}`);
+  if (spectrum.respectfulIrreverent != null) traits.push(`Bold ${spectrum.respectfulIrreverent}`);
+  if (spectrum.technicalAccessible != null) traits.push(`Accessible ${spectrum.technicalAccessible}`);
+  const ariaLabel = `Brand personality: ${traits.join(", ")}`;
+
   return (
     <ErrorCatcher onError={() => setHasError(true)}>
       <Suspense fallback={<div className="aspect-square w-full max-w-[280px]" />}>
         <div className="aspect-square w-full max-w-[280px]">
-          <LazyPersonalityRadar spectrum={spectrum} />
+          <LazyPersonalityRadar spectrum={spectrum} ariaLabel={ariaLabel} />
         </div>
       </Suspense>
     </ErrorCatcher>
@@ -181,8 +191,8 @@ function ColorStrip({
           {label}
         </p>
       )}
-      <div className="scrollbar-none overflow-x-auto">
-        <div className="flex min-w-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]" style={{ minWidth: `${colors.length * 60}px` }}>
+      <div className="scrollbar-none overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-w-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]" style={{ minWidth: `${Math.max(colors.length * 60, 0)}px` }}>
           {colors.map(({ key, color }) => (
             <div key={key} className="min-w-[60px] flex-1">
               <div
@@ -192,7 +202,7 @@ function ColorStrip({
             </div>
           ))}
         </div>
-        <div className="flex" style={{ minWidth: `${colors.length * 60}px` }}>
+        <div className="flex" style={{ minWidth: `${Math.max(colors.length * 60, 0)}px` }}>
           {colors.map(({ key, color }) => (
             <div key={key} className="min-w-[60px] flex-1 text-center">
               <p className="font-mono text-[11px] font-medium">{color.hex}</p>
@@ -379,7 +389,7 @@ export default function PublicBrandPage({
           </div>
         )}
 
-        <div className="relative z-10 mx-auto max-w-4xl px-6 pb-16 pt-12 md:pb-20 md:pt-16">
+        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 pb-16 pt-12 md:pb-20 md:pt-16">
           {/* Logo on checkerboard */}
           {kit.logos && kit.logos.length > 0 && kit.logos[0].url && (
             <div className="mb-6 inline-flex items-center justify-center rounded-lg bg-checkerboard p-3">
@@ -432,7 +442,7 @@ export default function PublicBrandPage({
           <>
             <hr className="border-[hsl(var(--border))]" />
             <section className="bg-checkerboard">
-              <div className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+              <div className="mx-auto max-w-4xl px-4 sm:px-6 py-16 md:py-20">
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                 Color Palette
               </p>
@@ -473,7 +483,7 @@ export default function PublicBrandPage({
             typography.scale) && (
             <>
               <hr className="border-[hsl(var(--border))]" />
-              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+              <section className="mx-auto max-w-4xl px-4 sm:px-6 py-16 md:py-20">
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                   Typography
                 </p>
@@ -504,7 +514,7 @@ export default function PublicBrandPage({
         {hasDesignSystem && (
           <>
             <hr className="border-[hsl(var(--border))]" />
-            <section className="mx-auto max-w-4xl px-6 py-10 md:py-14">
+            <section className="mx-auto max-w-4xl px-4 sm:px-6 py-10 md:py-14">
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                 Components
               </p>
@@ -610,7 +620,7 @@ export default function PublicBrandPage({
             toneSpectrum.technicalAccessible !== undefined) && (
             <>
               <hr className="border-[hsl(var(--border))]" />
-              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+              <section className="mx-auto max-w-4xl px-4 sm:px-6 py-16 md:py-20">
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                   Voice & Tone
                 </p>
@@ -618,7 +628,7 @@ export default function PublicBrandPage({
 
                 {/* Radar chart on subtle background */}
                 <div className="mt-10 flex justify-center">
-                  <div className="relative w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-6 sm:p-8 md:p-12">
+                  <div className="relative w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 p-4 sm:p-6 md:p-10">
                     {/* Subtle radial glow behind the chart */}
                     <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,hsl(var(--muted))_0%,transparent_70%)]" />
                     <div className="relative flex justify-center">
@@ -709,7 +719,7 @@ export default function PublicBrandPage({
             (rules.donts && rules.donts.length > 0)) && (
             <>
               <hr className="border-[hsl(var(--border))]" />
-              <section className="mx-auto max-w-4xl px-6 py-16 md:py-20">
+              <section className="mx-auto max-w-4xl px-4 sm:px-6 py-16 md:py-20">
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                   Brand Rules
                 </p>
@@ -721,14 +731,14 @@ export default function PublicBrandPage({
                   {/* Dos */}
                   {rules.dos && rules.dos.length > 0 && (
                     <div className="space-y-3 border-r-0 pb-6 pr-0 sm:border-r sm:border-[hsl(var(--border))] sm:pb-0 sm:pr-8">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--success))]">
                         Do
                       </h4>
                       <ul className="space-y-5">
                         {rules.dos.map((rule: string, i: number) => (
                           <li
                             key={i}
-                            className="border-l-2 border-emerald-500 pl-4 text-sm leading-relaxed"
+                            className="border-l-2 border-[hsl(var(--success))] pl-4 text-sm leading-relaxed"
                           >
                             {rule}
                           </li>
@@ -764,19 +774,18 @@ export default function PublicBrandPage({
           <>
             <hr className="border-[hsl(var(--border))]" />
             <section className="py-10 md:py-14">
-              <div className="mx-auto max-w-4xl px-6">
+              <div className="mx-auto max-w-4xl px-4 sm:px-6">
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
                   Design Assets
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Visual Elements</h2>
               </div>
 
-              <div className="scrollbar-none mt-6 flex gap-4 overflow-x-auto px-6 pb-2 md:px-[max(1.5rem,calc((100%-56rem)/2+1.5rem))]">
+              <div className="scrollbar-none mt-6 flex gap-4 overflow-x-auto px-4 sm:px-6 pb-2 md:px-[max(1.5rem,calc((100%-56rem)/2+1.5rem))]">
                 {kit.designAssets.slice(0, 12).map((asset: BrandDesignAsset, i: number) => (
                   <div
                     key={i}
-                    className="flex-shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]"
-                    style={{ width: "220px" }}
+                    className="w-48 sm:w-[220px] shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--border))]"
                   >
                     <div className="flex h-36 items-center justify-center bg-checkerboard p-3">
                       <img
@@ -803,7 +812,7 @@ export default function PublicBrandPage({
 
         {/* ─── CTA ────────────────────────────────────────────────────── */}
         <hr className="border-[hsl(var(--border))]" />
-        <section className="mx-auto max-w-4xl px-6 py-20 text-center md:py-28">
+        <section className="mx-auto max-w-4xl px-4 sm:px-6 py-20 text-center md:py-28">
           <h2 className="font-display text-xl font-semibold tracking-tight md:text-2xl">
             Extract your own brand kit
           </h2>

@@ -51,6 +51,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="min-h-screen bg-[hsl(var(--background))] font-sans text-[hsl(var(--foreground))]">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-[hsl(var(--foreground))] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[hsl(var(--background))]"
+        >
+          Skip to content
+        </a>
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -60,7 +66,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <div id="main-content">
+      <Outlet />
+    </div>
+  );
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {

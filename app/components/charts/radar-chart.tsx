@@ -32,6 +32,8 @@ export interface RadarChartProps {
   onHoverChange?: (index: number | null) => void;
   /** Additional class name for the container */
   className?: string;
+  /** Accessible label for the chart SVG */
+  ariaLabel?: string;
   /** Child components (RadarGrid, RadarAxis, RadarLabels, RadarArea) */
   children: ReactNode;
 }
@@ -47,6 +49,7 @@ interface RadarChartInnerProps {
   children: ReactNode;
   hoveredIndexProp?: number | null;
   onHoverChange?: (index: number | null) => void;
+  ariaLabel?: string;
 }
 
 function RadarChartInner({
@@ -60,6 +63,7 @@ function RadarChartInner({
   children,
   hoveredIndexProp,
   onHoverChange,
+  ariaLabel,
 }: RadarChartInnerProps) {
   const [internalHoveredIndex, setInternalHoveredIndex] = useState<
     number | null
@@ -153,7 +157,7 @@ function RadarChartInner({
   return (
     <RadarProvider value={contextValue}>
       <svg
-        aria-hidden="true"
+        {...(ariaLabel ? { role: "img", "aria-label": ariaLabel } : { "aria-hidden": true as const })}
         height={size}
         style={{ overflow: "visible" }}
         width={size}
@@ -176,6 +180,7 @@ export function RadarChart({
   className = "",
   hoveredIndex,
   onHoverChange,
+  ariaLabel,
   children,
 }: RadarChartProps) {
   // If fixed size is provided, use it directly
@@ -187,6 +192,7 @@ export function RadarChart({
       >
         <RadarChartInner
           animate={animate}
+          ariaLabel={ariaLabel}
           data={data}
           height={fixedSize}
           hoveredIndexProp={hoveredIndex}
@@ -209,6 +215,7 @@ export function RadarChart({
         {({ width, height }) => (
           <RadarChartInner
             animate={animate}
+            ariaLabel={ariaLabel}
             data={data}
             height={height}
             hoveredIndexProp={hoveredIndex}

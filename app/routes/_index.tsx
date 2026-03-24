@@ -276,12 +276,14 @@ export default function LandingPage() {
           {/* The input — the focal point */}
           <div className="animate-fade-up animation-delay-200 mx-auto mt-10 w-full max-w-xl">
             <form onSubmit={handleExtract} className="relative">
+              <label htmlFor="url-input" className="sr-only">Website URL to extract brand from</label>
               <Input
+                id="url-input"
                 type="text"
                 placeholder="stripe.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="h-16 rounded-2xl border-[hsl(var(--border))] pl-6 pr-16 text-lg shadow-sm transition-shadow focus:shadow-md"
+                className="h-16 rounded-2xl border-[hsl(var(--border))] pl-4 sm:pl-6 pr-14 sm:pr-16 text-lg shadow-sm transition-shadow focus:shadow-md"
                 required
                 disabled={isExtracting}
               />
@@ -291,6 +293,7 @@ export default function LandingPage() {
                 size="icon"
                 className="absolute right-2.5 top-1/2 h-11 w-11 -translate-y-1/2 rounded-xl"
                 disabled={isExtracting}
+                aria-label="Extract brand"
               >
                 {isExtracting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -327,7 +330,7 @@ export default function LandingPage() {
 
               {isComplete && (
                 <div className="flex items-center justify-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--success))]" />
                   <span className="text-sm font-medium">
                     Done — opening brand kit...
                   </span>
@@ -412,6 +415,7 @@ export default function LandingPage() {
       {/* Features — Staggered Editorial Blocks */}
       <section className="border-t border-[hsl(var(--border))]">
         <div className="mx-auto max-w-7xl px-6 py-24 md:py-32">
+          <h2 className="sr-only">Features</h2>
           <div className="grid grid-cols-1 gap-16 md:grid-cols-2 md:gap-12">
             {/* Feature 01 */}
             <div>
@@ -473,7 +477,7 @@ export default function LandingPage() {
       {/* Stats Bar */}
       <section className="border-t border-[hsl(var(--border))]">
         <div className="mx-auto max-w-7xl px-6 py-10">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+          <div className="flex flex-col flex-wrap items-center justify-between gap-3 sm:gap-6 sm:flex-row">
             <div className="flex items-center gap-3">
               <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 50+ fields extracted

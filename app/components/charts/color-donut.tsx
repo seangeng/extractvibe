@@ -9,7 +9,7 @@ interface ColorItem {
   color: { hex?: string; role?: string };
 }
 
-export default function ColorDonutChart({ colors }: { colors: ColorItem[] }) {
+export default function ColorDonutChart({ colors, ariaLabel }: { colors: ColorItem[]; ariaLabel?: string }) {
   const data = colors.map((c) => ({
     label: c.color.role || c.key,
     value: 1,
@@ -23,6 +23,7 @@ export default function ColorDonutChart({ colors }: { colors: ColorItem[] }) {
       innerRadius={55}
       padAngle={0.05}
       cornerRadius={3}
+      ariaLabel={ariaLabel}
     >
       <PieSliceStatic />
       <PieCenterStatic defaultLabel="colors" />

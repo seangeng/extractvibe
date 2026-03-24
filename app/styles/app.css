@@ -22,10 +22,12 @@
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
     --ring: 24 95% 46%;
@@ -58,10 +60,12 @@
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
     --border: 0 0% 15%;
     --input: 0 0% 15%;
     --ring: 24 95% 53%;
@@ -100,19 +104,26 @@
 }
 
 @layer utilities {
-  .animate-fade-up {
-    animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-    opacity: 0;
+  @media (prefers-reduced-motion: no-preference) {
+    .animate-fade-up {
+      animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+      opacity: 0;
+    }
+
+    .animate-pulse-dot {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .animation-delay-100 { animation-delay: 100ms; }
+    .animation-delay-200 { animation-delay: 200ms; }
+    .animation-delay-300 { animation-delay: 300ms; }
+    .animation-delay-400 { animation-delay: 400ms; }
   }
 
-  .animate-pulse-dot {
-    animation: pulse-dot 1.5s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up { opacity: 1; transform: none; }
+    .animate-pulse-dot { animation: none; }
   }
-
-  .animation-delay-100 { animation-delay: 100ms; }
-  .animation-delay-200 { animation-delay: 200ms; }
-  .animation-delay-300 { animation-delay: 300ms; }
-  .animation-delay-400 { animation-delay: 400ms; }
 
   .nav-link {
     position: relative;

@@ -336,3 +336,41 @@ const result = await openRouterCompletion(env.OPENROUTER_API_KEY, messages, {
 - Added `/.well-known/openapi.json` redirect, doc pages in sitemap.xml
 - Key decisions: Serper.dev over Firecrawl (1500x cheaper), URL probing first (free), agent bootstrap for LLM-first API access
 - What's next: MCP server (Phase 2-3), x402 micropayments (Phase 4), OAuth 2.1 for MCP auth
+
+---
+
+## Design Context
+
+### Users
+Three audiences in roughly equal measure: **developers** integrating brand data via API, **designers** extracting brand kits for competitive analysis or client work, and **AI agents** using the API to understand brands programmatically. All value speed, precision, and structured output. Developers want great docs and copy-paste code. Designers want visual clarity and exportable assets. AI agents want clean JSON and discoverable endpoints.
+
+### Brand Personality
+**Technical. Precise. Clean.** ExtractVibe is a sharp, developer-focused tool — confident in its capabilities without being loud about it. The tone is direct and informative, never corporate or marketing-heavy. Think Linear or Vercel: restrained, quietly excellent, zero fluff.
+
+### Aesthetic Direction
+
+**Visual tone:** Minimal, high-contrast, typographically driven. Let whitespace and structure do the work. Every element earns its place.
+
+**References:**
+- **Linear** — Clean, fast, developer-focused. Dark mode excellence, subtle animations, restrained palette.
+- **Vercel** — Minimal black/white, strong typography, modern SaaS feel, confident simplicity.
+
+**Anti-references (what ExtractVibe must NOT look like):**
+- Generic SaaS templates (gradient heroes, stock illustrations, bland copy)
+- Enterprise/corporate (stiff dashboards, formal tone, blue-gray everything)
+- Overly playful/cute (emojis, cartoon illustrations, childish colors)
+- Data-heavy dashboards (charts everywhere, dense tables, analytics-tool aesthetic)
+
+**Theme:** Light mode default, dark mode supported. Orange primary (`hsl(24 95% 46%)`) as the sole accent — used sparingly for CTAs and interactive states, never splashed across backgrounds.
+
+### Design Principles
+
+1. **Structure over decoration.** Use borders, spacing, and typography to create hierarchy — not gradients, shadows, or color fills. A well-spaced page with clear sections beats a colorful one.
+
+2. **Show, don't tell.** The brand kit results page IS the product demo. Every visual element (color strips, type scales, radar charts) should be immediately legible and useful, not decorative.
+
+3. **Developer-grade precision.** Mono font for values. Exact hex codes, not swatches alone. Copyable code blocks. Tables over prose. Treat every detail as something a developer might need to reference.
+
+4. **Purposeful motion only.** Animations must communicate state change (loading, appearing, transitioning). No decorative parallax, floating elements, or attention-seeking motion. Fade-up on entry, scale on press, nothing more.
+
+5. **One accent, used sparingly.** The orange primary appears on primary CTAs, active states, and the brand mark. Everything else is grayscale. If you're reaching for color, reconsider whether the element actually needs emphasis.

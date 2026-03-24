@@ -105,7 +105,8 @@ export function CodeBlock({ code, language, title }: CodeBlockProps) {
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+          aria-label={copied ? "Copied" : "Copy code to clipboard"}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--ring))]"
         >
           {copied ? (
             <Check className="h-3 w-3" />

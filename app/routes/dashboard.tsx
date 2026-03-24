@@ -57,7 +57,7 @@ export default function DashboardLayout() {
         to={item.href}
         onClick={onClick}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm min-h-[44px] transition-colors",
           isActive
             ? "border-l-2 border-[hsl(var(--foreground))] bg-[hsl(var(--muted))] font-medium text-[hsl(var(--foreground))]"
             : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
@@ -116,7 +116,12 @@ export default function DashboardLayout() {
             className="fixed inset-0 bg-black/50"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-[hsl(var(--card))]">
+          <aside
+            className="fixed inset-y-0 left-0 flex w-64 flex-col bg-[hsl(var(--card))]"
+            role="dialog"
+            aria-modal={true}
+            aria-label="Navigation"
+          >
             {sidebarContent}
           </aside>
         </div>

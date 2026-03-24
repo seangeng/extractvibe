@@ -52,6 +52,8 @@ export interface PieChartProps {
    * Default: 10
    */
   hoverOffset?: number;
+  /** Accessible label for the chart SVG */
+  ariaLabel?: string;
   /** Child components (PieSlice, PieCenter, patterns, gradients, etc.) */
   children: ReactNode;
 }
@@ -70,6 +72,7 @@ interface PieChartInnerProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   hoveredIndexProp?: number | null;
   onHoverChange?: (index: number | null) => void;
+  ariaLabel?: string;
 }
 
 // Helper to check if a child is a PieCenter component
@@ -110,6 +113,7 @@ function PieChartInner({
   containerRef,
   hoveredIndexProp,
   onHoverChange,
+  ariaLabel,
 }: PieChartInnerProps) {
   const [internalHoveredIndex, setInternalHoveredIndex] = useState<
     number | null
@@ -269,7 +273,7 @@ function PieChartInner({
       >
         {/* SVG layer with pie slices */}
         <svg
-          aria-hidden="true"
+          {...(ariaLabel ? { role: "img", "aria-label": ariaLabel } : { "aria-hidden": true as const })}
           height={size}
           style={{ gridArea: "1 / 1" }}
           width={size}
@@ -308,6 +312,7 @@ export function PieChart({
   hoveredIndex,
   onHoverChange,
   hoverOffset = DEFAULT_HOVER_OFFSET,
+  ariaLabel,
   children,
 }: PieChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -321,6 +326,7 @@ export function PieChart({
         style={{ width: fixedSize, height: fixedSize }}
       >
         <PieChartInner
+          ariaLabel={ariaLabel}
           containerRef={containerRef}
           cornerRadius={cornerRadius}
           data={data}
@@ -349,6 +355,7 @@ export function PieChart({
       <ParentSize debounceTime={10}>
         {({ width, height }) => (
           <PieChartInner
+            ariaLabel={ariaLabel}
             containerRef={containerRef}
             cornerRadius={cornerRadius}
             data={data}

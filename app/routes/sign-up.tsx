@@ -139,7 +139,7 @@ export default function SignUpPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <ErrorAlert message={error} />
+                <ErrorAlert message={error} id="sign-up-error" role="alert" />
               )}
               <div className="space-y-2">
                 <label
@@ -156,6 +156,8 @@ export default function SignUpPage() {
                   onChange={(e) => setName(e.target.value)}
                   required
                   autoComplete="name"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "sign-up-error" : undefined}
                 />
               </div>
               <div className="space-y-2">
@@ -173,6 +175,8 @@ export default function SignUpPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "sign-up-error" : undefined}
                 />
               </div>
               <div className="space-y-2">
@@ -191,6 +195,8 @@ export default function SignUpPage() {
                   required
                   minLength={8}
                   autoComplete="new-password"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "sign-up-error" : undefined}
                 />
               </div>
               <Button

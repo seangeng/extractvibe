@@ -319,6 +319,7 @@ export default function DocsPage() {
                 ? "left-0 translate-x-0"
                 : "-translate-x-full lg:translate-x-0"
             )}
+            {...(sidebarOpen ? { role: "dialog", "aria-modal": true, "aria-label": "Navigation" } : {})}
           >
             <Sidebar
               activeHash={activeHash}
@@ -447,16 +448,16 @@ fetch("/api/credits", { credentials: "include" });`}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Tier
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Reads
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Writes
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Window
                       </th>
                     </tr>
@@ -505,13 +506,13 @@ fetch("/api/credits", { credentials: "include" });`}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         Description
                       </th>
                     </tr>

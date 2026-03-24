@@ -222,7 +222,7 @@ export function MarketingFooter() {
         <div className="my-10 h-px bg-[hsl(var(--border))]" />
 
         {/* Link columns */}
-        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-6 sm:gap-8 md:gap-10 sm:grid-cols-3 md:grid-cols-5">
           {footerColumns.map((column) => (
             <FooterColumn
               key={column.heading}

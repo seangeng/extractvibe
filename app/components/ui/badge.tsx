@@ -16,7 +16,7 @@ const badgeVariants = cva(
         outline:
           "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]",
         success:
-          "border-emerald-500/20 bg-emerald-500/5 text-emerald-600",
+          "border-[hsl(var(--success))]/25 bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]",
       },
     },
     defaultVariants: {

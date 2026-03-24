@@ -129,7 +129,7 @@ export default function SignInPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <ErrorAlert message={error} />}
+              {error && <ErrorAlert message={error} id="sign-in-error" role="alert" />}
               <div className="space-y-2">
                 <label
                   htmlFor="email"
@@ -145,6 +145,8 @@ export default function SignInPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "sign-in-error" : undefined}
                 />
               </div>
               <div className="space-y-2">
@@ -162,6 +164,8 @@ export default function SignInPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "sign-in-error" : undefined}
                 />
               </div>
               <Button

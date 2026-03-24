@@ -13,7 +13,7 @@ interface ToneSpectrum {
   technicalAccessible?: number;
 }
 
-export default function PersonalityRadarChart({ spectrum }: { spectrum: ToneSpectrum }) {
+export default function PersonalityRadarChart({ spectrum, ariaLabel }: { spectrum: ToneSpectrum; ariaLabel?: string }) {
   const metrics: Array<{ key: string; label: string }> = [];
   const values: Record<string, number> = {};
 
@@ -45,7 +45,7 @@ export default function PersonalityRadarChart({ spectrum }: { spectrum: ToneSpec
   ];
 
   return (
-    <RadarChart data={data} metrics={metrics} levels={4} margin={55}>
+    <RadarChart data={data} metrics={metrics} levels={4} margin={55} ariaLabel={ariaLabel}>
       <RadarGrid />
       <RadarLabels />
       <RadarAreaStatic />
