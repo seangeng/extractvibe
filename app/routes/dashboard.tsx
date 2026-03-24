@@ -8,6 +8,7 @@ import {
   LogOut,
   Menu,
   LayoutDashboard,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { signOut } from "~/lib/auth-client";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Extract", href: "/dashboard/extract", icon: Wand2 },
   { name: "History", href: "/dashboard/history", icon: History },
   { name: "API Keys", href: "/dashboard/keys", icon: Key },
+  { name: "Usage", href: "/dashboard/usage", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

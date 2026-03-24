@@ -33,6 +33,9 @@ export default [
   route("ai/brand-voice-analysis", "routes/ai.brand-voice-analysis.tsx"),
   route("ai/vibe-synthesis", "routes/ai.vibe-synthesis.tsx"),
 
+  // Claim (agent account linking)
+  route("claim/:token", "routes/claim.$token.tsx"),
+
   // Marketing
   route("pricing", "routes/pricing.tsx"),
   route("about", "routes/about.tsx"),
@@ -47,6 +50,7 @@ export default [
     route("dashboard/history", "routes/dashboard.history.tsx"),
     route("dashboard/brand/:jobId", "routes/dashboard.brand.$jobId.tsx"),
     route("dashboard/keys", "routes/dashboard.keys.tsx"),
+    route("dashboard/usage", "routes/dashboard.usage.tsx"),
     route("dashboard/settings", "routes/dashboard.settings.tsx"),
   ]),
 ] satisfies RouteConfig;

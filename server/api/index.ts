@@ -15,6 +15,37 @@ import { AgentBootstrapRequest } from "../schema/api";
 
 export const apiRouter = new Hono<{ Bindings: Env }>();
 
+// ---------------------------------------------------------------------------
+// Request logging middleware — logs every API request to the request_log table.
+// Runs AFTER the handler completes so we can capture the status code and latency.
+// The userId is set by route handlers via c.set("authUserId", ...) if available.
+// ---------------------------------------------------------------------------
+apiRouter.use("*", async (c, next) => {
+  const start = Date.now();
+  await next();
+
+  // Fire-and-forget — don't block the response
+  const latencyMs = Date.now() - start;
+  const userId = (c.get("authUserId" as never) as string | undefined) || null;
+
+  c.executionCtx.waitUntil(
+    c.env.DB.prepare(
+      `INSERT INTO request_log (id, "userId", endpoint, domain, "statusCode", "latencyMs", "createdAt")
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+    )
+      .bind(
+        crypto.randomUUID(),
+        userId,
+        `${c.req.method} ${c.req.path}`,
+        null,
+        c.res.status,
+        latencyMs
+      )
+      .run()
+      .catch(() => {}) // Non-fatal
+  )
+});
+
 // OpenAPI spec (static, hand-maintained)
 apiRouter.get("/openapi.json", async (c) => {
   const cached = await c.env.CACHE.get("openapi:spec", "json");
@@ -441,6 +472,89 @@ apiRouter.delete("/keys/:id", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Claim — link an agent-bootstrapped account to a real user
+// ---------------------------------------------------------------------------
+apiRouter.post("/claim/:token", async (c) => {
+  // 1. Require authentication (session cookie — user must be signed in)
+  const auth = await withAuthAndRateLimit(c, "read");
+  const realUserId = auth.userId;
+
+  // 2. Look up claim token in KV
+  const token = c.req.param("token");
+  const claimRaw = await c.env.CACHE.get(`claim:${token}`);
+
+  if (!claimRaw) {
+    return c.json({ error: "Claim token not found or expired" }, 404);
+  }
+
+  // 3. Parse the claim payload
+  const claim = JSON.parse(claimRaw) as {
+    userId: string;
+    agentName: string;
+    contactEmail: string | null;
+    createdAt: string;
+  };
+
+  const agentUserId = claim.userId;
+
+  // Prevent claiming your own account
+  if (agentUserId === realUserId) {
+    return c.json({ error: "Cannot claim your own account" }, 400);
+  }
+
+  // 4. Transfer API keys from agent to real user
+  const keysResult = await c.env.DB.prepare(
+    `UPDATE api_key SET "userId" = ? WHERE "userId" = ?`
+  )
+    .bind(realUserId, agentUserId)
+    .run();
+  const keysTransferred = keysResult.meta.changes ?? 0;
+
+  // 5. Transfer credits from agent to real user
+  const agentCredit = await c.env.DB.prepare(
+    `SELECT balance FROM credit WHERE "userId" = ?`
+  )
+    .bind(agentUserId)
+    .first<{ balance: number }>();
+
+  const creditsTransferred = agentCredit?.balance ?? 0;
+
+  if (creditsTransferred > 0) {
+    // Ensure the real user has a credit row
+    await getUserCredits(c.env, realUserId);
+    // Add agent's credits to the real user
+    await c.env.DB.prepare(
+      `UPDATE credit SET balance = balance + ? WHERE "userId" = ?`
+    )
+      .bind(creditsTransferred, realUserId)
+      .run();
+  }
+
+  // Delete the agent's credit row
+  await c.env.DB.prepare(`DELETE FROM credit WHERE "userId" = ?`)
+    .bind(agentUserId)
+    .run();
+
+  // 6. Transfer extraction history
+  await c.env.DB.prepare(
+    `UPDATE extraction SET "userId" = ? WHERE "userId" = ?`
+  )
+    .bind(realUserId, agentUserId)
+    .run();
+
+  // 7. Delete the agent pseudo-user
+  await c.env.DB.prepare(`DELETE FROM "user" WHERE id = ?`)
+    .bind(agentUserId)
+    .run();
+
+  // 8. Delete the claim token from KV
+  await c.env.CACHE.delete(`claim:${token}`);
+
+  // 9. Return success
+  return c.json({ ok: true, keysTransferred, creditsTransferred });
+});
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -454,6 +568,8 @@ async function withRateLimit(
   action: "read" | "extract"
 ): Promise<AuthResult> {
   const auth = await resolveAuth(c);
+  // Store userId for the request logging middleware
+  if (auth.userId) c.set("authUserId" as never, auth.userId as never);
   const clientId = getClientId(c, auth.userId);
   const tier = getTier(auth.plan || null, auth.authenticated);
   const rl = await checkRateLimit(c.env, clientId, `${tier}:${action}`);
