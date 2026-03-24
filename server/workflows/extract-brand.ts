@@ -9,6 +9,7 @@ import type { ParseVisualOutput } from "../lib/extractor/parse-visual";
 import type { VoiceAnalysisOutput } from "../lib/extractor/analyze-voice";
 import type { VibeSynthesisOutput } from "../lib/extractor/synthesize-vibe";
 import type { BrandKitDiscoveryOutput } from "../lib/extractor/discover-brand-kit";
+import { log, startTimer } from "../lib/logger";
 
 interface ExtractBrandParams {
   url: string;
@@ -26,6 +27,8 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
     const domain = new URL(url).hostname.replace(/^www\./, "");
     const kvKey = `wf:${jobId}`;
 
+    log({ level: "info", event: "extraction.started", jobId, domain, meta: { url, userId } });
+
     // -----------------------------------------------------------------------
     // Step 1: Fetch, render, and store the heavy data in KV
     // -----------------------------------------------------------------------
@@ -33,33 +36,40 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       "fetch-render",
       { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "90 seconds" },
       async () => {
+        const timer = startTimer();
         await this.reportProgress(jobId, "fetch-render", "running", 0);
-        const { fetchAndRender } = await import("../lib/extractor/fetch-render");
-        const result = await fetchAndRender(this.env, url);
+        try {
+          const { fetchAndRender } = await import("../lib/extractor/fetch-render");
+          const result = await fetchAndRender(this.env, url);
 
-        // Store screenshot in R2 separately
-        if (result.screenshot) {
-          try {
-            await this.env.R2_BUCKET.put(
-              `brands/${domain}/screenshot.png`,
-              result.screenshot,
-              { httpMetadata: { contentType: "image/png" } }
-            );
-          } catch { /* non-fatal */ }
+          // Store screenshot in R2 separately
+          if (result.screenshot) {
+            try {
+              await this.env.R2_BUCKET.put(
+                `brands/${domain}/screenshot.png`,
+                result.screenshot,
+                { httpMetadata: { contentType: "image/png" } }
+              );
+            } catch { /* non-fatal */ }
+          }
+
+          // Store the fetch result in KV (without screenshot and truncated HTML)
+          const lightweight = {
+            ...result,
+            screenshot: null,
+            html: result.html?.substring(0, 50000) || "", // cap HTML at 50KB
+          };
+          await this.env.CACHE.put(`${kvKey}:fetch`, JSON.stringify(lightweight), {
+            expirationTtl: 3600,
+          });
+
+          await this.reportProgress(jobId, "fetch-render", "complete", 20);
+          log({ level: "info", event: "step.complete", jobId, domain, step: "fetch-render", durationMs: timer.elapsed() });
+          return { stored: true };
+        } catch (err) {
+          log({ level: "error", event: "step.failed", jobId, domain, step: "fetch-render", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
+          throw err;
         }
-
-        // Store the fetch result in KV (without screenshot and truncated HTML)
-        const lightweight = {
-          ...result,
-          screenshot: null,
-          html: result.html?.substring(0, 50000) || "", // cap HTML at 50KB
-        };
-        await this.env.CACHE.put(`${kvKey}:fetch`, JSON.stringify(lightweight), {
-          expirationTtl: 3600,
-        });
-
-        await this.reportProgress(jobId, "fetch-render", "complete", 20);
-        return { stored: true };
       }
     );
 
@@ -72,56 +82,63 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       "parse-and-analyze",
       { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "90 seconds" },
       async () => {
+        const timer = startTimer();
         await this.reportProgress(jobId, "parse-assets", "running", 20);
         await this.reportProgress(jobId, "analyze-voice", "running", 20);
 
-        // Load fetch result from KV (once, shared by both tasks)
-        const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as Record<string, unknown> | null;
-        if (!fetchData) throw new Error("Fetch result not found in KV");
+        try {
+          // Load fetch result from KV (once, shared by both tasks)
+          const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as Record<string, unknown> | null;
+          if (!fetchData) throw new Error("Fetch result not found in KV");
 
-        // --- Task A: Parse visual identity ---
-        const parseVisualTask = async () => {
-          const adapted = this.adaptFetchDataForVisual(fetchData, url, domain);
+          // --- Task A: Parse visual identity ---
+          const parseVisualTask = async () => {
+            const adapted = this.adaptFetchDataForVisual(fetchData, url, domain);
 
-          const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
-          const result = await parseVisualIdentity(adapted, this.env, domain);
+            const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
+            const result = await parseVisualIdentity(adapted, this.env, domain);
 
-          await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {
-            expirationTtl: 3600,
-          });
+            await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {
+              expirationTtl: 3600,
+            });
 
-          await this.reportProgress(jobId, "parse-assets", "complete", 40);
-        };
+            await this.reportProgress(jobId, "parse-assets", "complete", 40);
+          };
 
-        // --- Task B: Analyze voice ---
-        const analyzeVoiceTask = async () => {
-          const fd = fetchData as Record<string, unknown>;
-          const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
-          const result = await analyzeVoice(
-            {
-              headings: (fd.headings as Array<{ tag: string; text: string }>) || [],
-              heroText: (fd.heroText as string[]) || [],
-              ctaTexts: (fd.ctaTexts as string[]) || [],
-              navLabels: (fd.navLabels as string[]) || [],
-              footerText: (fd.footerText as string) || "",
-              bodyText: (fd.bodyText as string) || "",
-              brandName: (fd.brandName as string) || null,
-              description: (fd.description as string) || null,
-            },
-            this.env.OPENROUTER_API_KEY
-          );
+          // --- Task B: Analyze voice ---
+          const analyzeVoiceTask = async () => {
+            const fd = fetchData as Record<string, unknown>;
+            const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
+            const result = await analyzeVoice(
+              {
+                headings: (fd.headings as Array<{ tag: string; text: string }>) || [],
+                heroText: (fd.heroText as string[]) || [],
+                ctaTexts: (fd.ctaTexts as string[]) || [],
+                navLabels: (fd.navLabels as string[]) || [],
+                footerText: (fd.footerText as string) || "",
+                bodyText: (fd.bodyText as string) || "",
+                brandName: (fd.brandName as string) || null,
+                description: (fd.description as string) || null,
+              },
+              this.env.OPENROUTER_API_KEY
+            );
 
-          await this.env.CACHE.put(`${kvKey}:voice`, JSON.stringify(result), {
-            expirationTtl: 3600,
-          });
+            await this.env.CACHE.put(`${kvKey}:voice`, JSON.stringify(result), {
+              expirationTtl: 3600,
+            });
 
-          await this.reportProgress(jobId, "analyze-voice", "complete", 60);
-        };
+            await this.reportProgress(jobId, "analyze-voice", "complete", 60);
+          };
 
-        // Run both in parallel
-        await Promise.all([parseVisualTask(), analyzeVoiceTask()]);
+          // Run both in parallel
+          await Promise.all([parseVisualTask(), analyzeVoiceTask()]);
 
-        return { stored: true };
+          log({ level: "info", event: "step.complete", jobId, domain, step: "parse-and-analyze", durationMs: timer.elapsed() });
+          return { stored: true };
+        } catch (err) {
+          log({ level: "error", event: "step.failed", jobId, domain, step: "parse-and-analyze", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
+          throw err;
+        }
       }
     );
 
@@ -132,39 +149,46 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       "synthesize-vibe",
       { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "60 seconds" },
       async () => {
+        const timer = startTimer();
         await this.reportProgress(jobId, "synthesize-vibe", "running", 60);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
-        if (!visualData || !voiceData) throw new Error("Prior step data not found in KV");
+        try {
+          const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+          const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
+          if (!visualData || !voiceData) throw new Error("Prior step data not found in KV");
 
-        const { synthesizeVibe } = await import("../lib/extractor/synthesize-vibe");
-        const { discoverBrandKit } = await import("../lib/extractor/discover-brand-kit");
+          const { synthesizeVibe } = await import("../lib/extractor/synthesize-vibe");
+          const { discoverBrandKit } = await import("../lib/extractor/discover-brand-kit");
 
-        const [vibeOutput, brandKitOutput] = await Promise.all([
-          synthesizeVibe(
-            {
-              identity: visualData.identity,
-              colors: visualData.colors,
-              typography: visualData.typography,
-              voice: voiceData.voice,
-              buttons: visualData.buttons,
-              effects: visualData.effects,
-              spacing: visualData.spacing,
-              domain,
-              url,
-            },
-            this.env.OPENROUTER_API_KEY
-          ),
-          discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.SERPER_API_KEY),
-        ]);
+          const [vibeOutput, brandKitOutput] = await Promise.all([
+            synthesizeVibe(
+              {
+                identity: visualData.identity,
+                colors: visualData.colors,
+                typography: visualData.typography,
+                voice: voiceData.voice,
+                buttons: visualData.buttons,
+                effects: visualData.effects,
+                spacing: visualData.spacing,
+                domain,
+                url,
+              },
+              this.env.OPENROUTER_API_KEY
+            ),
+            discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.SERPER_API_KEY),
+          ]);
 
-        await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
-          expirationTtl: 3600,
-        });
+          await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
+            expirationTtl: 3600,
+          });
 
-        await this.reportProgress(jobId, "synthesize-vibe", "complete", 80);
-        return { stored: true };
+          await this.reportProgress(jobId, "synthesize-vibe", "complete", 80);
+          log({ level: "info", event: "step.complete", jobId, domain, step: "synthesize-vibe", durationMs: timer.elapsed() });
+          return { stored: true };
+        } catch (err) {
+          log({ level: "error", event: "step.failed", jobId, domain, step: "synthesize-vibe", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
+          throw err;
+        }
       }
     );
 
@@ -175,129 +199,170 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       "score-package",
       { timeout: "15 seconds" },
       async () => {
+        const timer = startTimer();
         await this.reportProgress(jobId, "score-package", "running", 80);
 
-        const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
-        const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
-        const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as {
-          vibe: VibeSynthesisOutput;
-          brandKit: BrandKitDiscoveryOutput;
-        } | null;
+        try {
+          const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
+          const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
+          const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as {
+            vibe: VibeSynthesisOutput;
+            brandKit: BrandKitDiscoveryOutput;
+          } | null;
 
-        // Fetch enrichment data (LoadLogo: clean logo + brand name)
-        const loadLogoData = await (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
-          try {
-            const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
-              headers: { "Accept": "application/json" },
-              signal: AbortSignal.timeout(5000),
-            });
-            if (!llRes.ok) return null;
-            const llJson = (await llRes.json()) as Record<string, unknown>;
-            return {
-              logo: (llJson.logo as string) || undefined,
-              favicon: (llJson.favicon as string) || undefined,
-              name: (llJson.name as string) || undefined,
-            };
-          } catch { return null; }
-        })();
+          // Fetch enrichment data (LoadLogo: clean logo + brand name)
+          const loadLogoData = await (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
+            try {
+              const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
+                headers: { "Accept": "application/json" },
+                signal: AbortSignal.timeout(5000),
+              });
+              if (!llRes.ok) return null;
+              const llJson = (await llRes.json()) as Record<string, unknown>;
+              return {
+                logo: (llJson.logo as string) || undefined,
+                favicon: (llJson.favicon as string) || undefined,
+                name: (llJson.name as string) || undefined,
+              };
+            } catch { return null; }
+          })();
 
-        const kit = createEmptyBrandKit(url);
-        kit.meta.durationMs = Date.now() - startTime;
-        kit.meta.extractionDepth = 1;
+          const kit = createEmptyBrandKit(url);
+          kit.meta.durationMs = Date.now() - startTime;
+          kit.meta.extractionDepth = 1;
 
-        if (visualData) {
-          kit.identity = { ...visualData.identity, archetypes: vibeData?.vibe?.archetypes || [] };
-          kit.logos = visualData.logos;
-          kit.colors = visualData.colors;
-          kit.typography = visualData.typography;
-          kit.spacing = visualData.spacing;
-          kit.assets = visualData.assets;
-          if (visualData.buttons) kit.buttons = visualData.buttons;
-          if (visualData.effects) kit.effects = visualData.effects;
-          if (visualData.ogImage) kit.ogImage = visualData.ogImage;
-          if (visualData.iconLibrary) kit.iconLibrary = visualData.iconLibrary;
-        }
-
-        // Add LoadLogo data
-        if (loadLogoData?.logo) {
-          // Add as the first logo entry with highest confidence
-          kit.logos = [
-            {
-              type: "primary" as const,
-              url: loadLogoData.logo,
-              originalUrl: loadLogoData.logo,
-              format: "svg" as const,
-              confidence: 1.0,
-              source: "loadlogo" as const,
-            },
-            ...(kit.logos || []),
-          ];
-        }
-        // Use LoadLogo name if better than what we extracted
-        // Prefer short, clean names over long page titles with separators
-        if (loadLogoData?.name) {
-          const current = kit.identity?.brandName || "";
-          const isTitleLike = current.includes("|") || current.includes("—") || current.includes(" - ") || current.length > 60;
-          if (!current || isTitleLike) {
-            kit.identity = { ...kit.identity, brandName: loadLogoData.name };
+          if (visualData) {
+            kit.identity = { ...visualData.identity, archetypes: vibeData?.vibe?.archetypes || [] };
+            kit.logos = visualData.logos;
+            kit.colors = visualData.colors;
+            kit.typography = visualData.typography;
+            kit.spacing = visualData.spacing;
+            kit.assets = visualData.assets;
+            if (visualData.buttons) kit.buttons = visualData.buttons;
+            if (visualData.effects) kit.effects = visualData.effects;
+            if (visualData.ogImage) kit.ogImage = visualData.ogImage;
+            if (visualData.iconLibrary) kit.iconLibrary = visualData.iconLibrary;
           }
-        }
 
-        // Add design assets (top 10 most interesting)
-        if (visualData?.designAssets) {
-          kit.designAssets = visualData.designAssets;
-        }
+          // Add LoadLogo data
+          if (loadLogoData?.logo) {
+            // Add as the first logo entry with highest confidence
+            kit.logos = [
+              {
+                type: "primary" as const,
+                url: loadLogoData.logo,
+                originalUrl: loadLogoData.logo,
+                format: "svg" as const,
+                confidence: 1.0,
+                source: "loadlogo" as const,
+              },
+              ...(kit.logos || []),
+            ];
+          }
+          // Use LoadLogo name if better than what we extracted
+          // Prefer short, clean names over long page titles with separators
+          if (loadLogoData?.name) {
+            const current = kit.identity?.brandName || "";
+            const isTitleLike = current.includes("|") || current.includes("\u2014") || current.includes(" - ") || current.length > 60;
+            if (!current || isTitleLike) {
+              kit.identity = { ...kit.identity, brandName: loadLogoData.name };
+            }
+          }
 
-        if (voiceData) {
-          kit.voice = voiceData.voice;
-        }
+          // Add design assets (top 10 most interesting)
+          if (visualData?.designAssets) {
+            kit.designAssets = visualData.designAssets;
+          }
 
-        if (vibeData) {
-          kit.rules = vibeData.vibe?.rules;
-          kit.vibe = vibeData.vibe?.vibe;
-          kit.officialGuidelines = {
-            discoveredUrl: vibeData.brandKit?.discoveredUrl || null,
-            hasOfficialKit: vibeData.brandKit?.hasOfficialKit || false,
-            guidelineRules: vibeData.brandKit?.guidelineRules || [],
+          if (voiceData) {
+            kit.voice = voiceData.voice;
+          }
+
+          if (vibeData) {
+            kit.rules = vibeData.vibe?.rules;
+            kit.vibe = vibeData.vibe?.vibe;
+            kit.officialGuidelines = {
+              discoveredUrl: vibeData.brandKit?.discoveredUrl || null,
+              hasOfficialKit: vibeData.brandKit?.hasOfficialKit || false,
+              guidelineRules: vibeData.brandKit?.guidelineRules || [],
+            };
+
+            if (vibeData.brandKit?.hasOfficialKit && vibeData.brandKit?.guidelineRules?.length > 0) {
+              kit.rules = { ...kit.rules, source: "merged" };
+            }
+          }
+
+          // Cache result (72 hours)
+          const resultJson = JSON.stringify(kit);
+          await this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: 60 * 60 * 72 });
+          await this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: 60 * 60 * 72 });
+
+          // Update D1 extraction record
+          try {
+            await this.env.DB.prepare(
+              `UPDATE extraction SET status = 'complete', "resultKey" = ?, "durationMs" = ?, "completedAt" = datetime('now') WHERE id = ?`
+            ).bind(`result:${jobId}`, kit.meta.durationMs, jobId).run();
+          } catch { /* non-fatal */ }
+
+          // Clean up intermediate KV keys
+          await Promise.allSettled([
+            this.env.CACHE.delete(`${kvKey}:fetch`),
+            this.env.CACHE.delete(`${kvKey}:visual`),
+            this.env.CACHE.delete(`${kvKey}:voice`),
+            this.env.CACHE.delete(`${kvKey}:vibe`),
+          ]);
+
+          await this.reportProgress(jobId, "score-package", "complete", 100);
+
+          // Compute extraction quality score (0-100)
+          const qualityScore = [
+            kit.identity?.brandName ? 10 : 0,
+            (kit.logos?.length || 0) > 0 ? 15 : 0,
+            (kit.colors?.rawPalette?.length || 0) >= 3 ? 15 : 5,
+            (kit.typography?.families?.length || 0) > 0 ? 15 : 0,
+            kit.voice ? 15 : 0,
+            kit.vibe ? 10 : 0,
+            kit.rules?.dos?.length ? 10 : 0,
+            kit.officialGuidelines?.hasOfficialKit ? 10 : 0,
+          ].reduce((a, b) => a + b, 0);
+
+          const finalSummary = {
+            success: true,
+            domain,
+            jobId,
+            durationMs: kit.meta.durationMs,
+            logosFound: kit.logos?.length || 0,
+            colorsFound: kit.colors?.rawPalette?.length || 0,
+            fontsFound: kit.typography?.families?.length || 0,
           };
 
-          if (vibeData.brandKit?.hasOfficialKit && vibeData.brandKit?.guidelineRules?.length > 0) {
-            kit.rules = { ...kit.rules, source: "merged" };
-          }
+          log({ level: "info", event: "step.complete", jobId, domain, step: "score-package", durationMs: timer.elapsed() });
+          log({
+            level: "info",
+            event: "extraction.quality",
+            jobId,
+            domain,
+            meta: { qualityScore, ...finalSummary },
+          });
+          log({
+            level: "info",
+            event: "extraction.complete",
+            jobId,
+            domain,
+            durationMs: Date.now() - startTime,
+            meta: {
+              logosFound: finalSummary.logosFound,
+              colorsFound: finalSummary.colorsFound,
+              fontsFound: finalSummary.fontsFound,
+            },
+          });
+
+          // Return a small summary (not the full kit — avoid step output limit)
+          return finalSummary;
+        } catch (err) {
+          log({ level: "error", event: "step.failed", jobId, domain, step: "score-package", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
+          throw err;
         }
-
-        // Cache result (72 hours)
-        const resultJson = JSON.stringify(kit);
-        await this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: 60 * 60 * 72 });
-        await this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: 60 * 60 * 72 });
-
-        // Update D1 extraction record
-        try {
-          await this.env.DB.prepare(
-            `UPDATE extraction SET status = 'complete', "resultKey" = ?, "durationMs" = ?, "completedAt" = datetime('now') WHERE id = ?`
-          ).bind(`result:${jobId}`, kit.meta.durationMs, jobId).run();
-        } catch { /* non-fatal */ }
-
-        // Clean up intermediate KV keys
-        await Promise.allSettled([
-          this.env.CACHE.delete(`${kvKey}:fetch`),
-          this.env.CACHE.delete(`${kvKey}:visual`),
-          this.env.CACHE.delete(`${kvKey}:voice`),
-          this.env.CACHE.delete(`${kvKey}:vibe`),
-        ]);
-
-        await this.reportProgress(jobId, "score-package", "complete", 100);
-
-        // Return a small summary (not the full kit — avoid step output limit)
-        return {
-          success: true,
-          domain,
-          jobId,
-          durationMs: kit.meta.durationMs,
-          logosFound: kit.logos?.length || 0,
-          colorsFound: kit.colors?.rawPalette?.length || 0,
-          fontsFound: kit.typography?.families?.length || 0,
-        };
       }
     );
 

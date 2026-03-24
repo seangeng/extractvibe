@@ -36,6 +36,7 @@ import type {
   BrandEffects,
 } from "../../schema/v1";
 import type { Env } from "../../env";
+import { getColorName } from "../color-names";
 
 // ─── FetchRenderOutput Type ──────────────────────────────────────────
 // This will be replaced with an import from ./fetch-render once that module
@@ -126,6 +127,15 @@ export interface FetchRenderOutput {
     sampleIcons: string[];
     source: string;
   } | null;
+  /** Dark mode detection info from fetch-render */
+  darkModeInfo?: {
+    hasDarkClass: boolean;
+    currentTheme: string | null;
+    colorScheme: string;
+    hasThemeToggle: boolean;
+    darkStylesheetFound: boolean;
+    supportsDarkMode: boolean;
+  };
 }
 
 // ─── Output ──────────────────────────────────────────────────────────
@@ -872,17 +882,52 @@ function mapCssVarToRole(
 }
 
 /** Determine if a CSS custom property context indicates dark mode */
-function isDarkModeContext(context?: string): boolean {
+function isDarkModeContext(context?: string, darkModeInfo?: FetchRenderOutput["darkModeInfo"]): boolean {
   if (!context) return false;
   const lower = context.toLowerCase();
-  return (
+
+  // Original patterns
+  if (
     lower.includes(".dark") ||
     lower.includes("[data-theme=\"dark\"]") ||
     lower.includes("[data-theme='dark']") ||
     lower.includes("dark-mode") ||
     lower.includes("prefers-color-scheme: dark") ||
     lower.includes("prefers-color-scheme:dark")
-  );
+  ) {
+    return true;
+  }
+
+  // Additional class-based patterns
+  if (
+    lower.includes(".theme-dark") ||
+    lower.includes(".dark-theme") ||
+    lower.includes(".night")
+  ) {
+    return true;
+  }
+
+  // Additional data attribute patterns
+  if (
+    lower.includes('[data-mode="dark"]') ||
+    lower.includes("[data-mode='dark']") ||
+    lower.includes('[data-color-scheme="dark"]') ||
+    lower.includes("[data-color-scheme='dark']") ||
+    lower.includes('[data-color-mode="dark"]') ||
+    lower.includes("[data-color-mode='dark']")
+  ) {
+    return true;
+  }
+
+  // If darkModeInfo provides a currentTheme value, check for matching data attribute in context
+  if (darkModeInfo?.currentTheme) {
+    const themeVal = darkModeInfo.currentTheme.toLowerCase();
+    if (themeVal.includes("dark") && lower.includes(themeVal)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** Determine if a CSS custom property name suggests a dark variant */
@@ -905,13 +950,15 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     ? fetchOutput.cssCustomProperties
     : Object.entries(fetchOutput.cssCustomProperties || {}).map(([name, value]) => ({ name, value: String(value) }));
 
+  const darkModeInfo = fetchOutput.darkModeInfo;
+
   for (const prop of cssProps) {
     const parsed = parseColor(prop.value);
     if (!parsed) continue;
 
     const roleInfo = mapCssVarToRole(prop.name);
     const isDark =
-      isDarkModeContext(prop.context) || isDarkVariantName(prop.name);
+      isDarkModeContext(prop.context, darkModeInfo) || isDarkVariantName(prop.name);
 
     collectedColors.push({
       hex: parsed.hex,
@@ -1196,7 +1243,10 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       return colorDistance(color.rgb!, existing.rgb!) < 5;
     });
     if (!isDuplicate) {
-      deduplicatedPalette.push(color);
+      deduplicatedPalette.push({
+        ...color,
+        name: color.hex ? getColorName(color.hex) : undefined,
+      });
     }
   }
 
@@ -1204,7 +1254,9 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
   const lightMode: ColorMode = {};
   const darkMode: ColorMode = {};
   const semantic: SemanticColors = {};
-  let hasDarkMode = false;
+  // Seed hasDarkMode from darkModeInfo if available (covers CSS-in-JS,
+  // toggle buttons, color-scheme property, and other non-CSS-var signals)
+  let hasDarkMode = darkModeInfo?.supportsDarkMode ?? false;
 
   // Group collected colors by role, preferring highest confidence
   type RoleKey = keyof ColorMode;
@@ -1235,6 +1287,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       lightMode[role] = {
         hex: best.hex,
         rgb: best.rgb,
+        name: best.hex ? getColorName(best.hex) : undefined,
         role,
         source: best.source,
         confidence: best.confidence,
@@ -1252,6 +1305,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       darkMode[role] = {
         hex: best.hex,
         rgb: best.rgb,
+        name: best.hex ? getColorName(best.hex) : undefined,
         role,
         source: best.source,
         confidence: best.confidence,
@@ -1267,6 +1321,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       semantic[role] = {
         hex: best.hex,
         rgb: best.rgb,
+        name: best.hex ? getColorName(best.hex) : undefined,
         role,
         source: best.source,
         confidence: best.confidence,
@@ -1287,24 +1342,24 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
 
       // background: very light color (luminance > 0.9)
       if (unfilledRoles.includes("background") && luminance > 0.9 && !lightMode["background"]) {
-        lightMode["background"] = { hex: color.hex, rgb: color.rgb, role: "background", source: "inferred: lightest in palette", confidence: 0.4 };
+        lightMode["background"] = { hex: color.hex, rgb: color.rgb, name: color.hex ? getColorName(color.hex) : undefined, role: "background", source: "inferred: lightest in palette", confidence: 0.4 };
       }
 
       // muted: medium gray, low saturation
       if (unfilledRoles.includes("muted") && saturation < 0.15 && luminance > 0.3 && luminance < 0.7 && !lightMode["muted"]) {
-        lightMode["muted"] = { hex: color.hex, rgb: color.rgb, role: "muted", source: "inferred: gray in palette", confidence: 0.4 };
+        lightMode["muted"] = { hex: color.hex, rgb: color.rgb, name: color.hex ? getColorName(color.hex) : undefined, role: "muted", source: "inferred: gray in palette", confidence: 0.4 };
       }
 
       // border: light grayish
       if (unfilledRoles.includes("border") && saturation < 0.15 && luminance > 0.65 && luminance < 0.92 && !lightMode["border"]) {
-        lightMode["border"] = { hex: color.hex, rgb: color.rgb, role: "border", source: "inferred: light gray in palette", confidence: 0.35 };
+        lightMode["border"] = { hex: color.hex, rgb: color.rgb, name: color.hex ? getColorName(color.hex) : undefined, role: "border", source: "inferred: light gray in palette", confidence: 0.35 };
       }
 
       // accent: saturated color that isn't the primary
       if (unfilledRoles.includes("accent") && saturation > 0.3 && !lightMode["accent"]) {
         const primary = lightMode["primary"];
         if (primary?.rgb && colorDistance(color.rgb, primary.rgb) > 30) {
-          lightMode["accent"] = { hex: color.hex, rgb: color.rgb, role: "accent", source: "inferred: saturated non-primary", confidence: 0.4 };
+          lightMode["accent"] = { hex: color.hex, rgb: color.rgb, name: color.hex ? getColorName(color.hex) : undefined, role: "accent", source: "inferred: saturated non-primary", confidence: 0.4 };
         }
       }
     }
@@ -1988,6 +2043,7 @@ export async function parseVisualIdentity(
     backgroundImages: rawFetchOutput.backgroundImages || [],
     stylesheetUrls: rawFetchOutput.stylesheetUrls || [],
     meta: rawFetchOutput.meta || {},
+    darkModeInfo: rawFetchOutput.darkModeInfo as FetchRenderOutput["darkModeInfo"],
   } as FetchRenderOutput;
 
   // Run sync parsers immediately, logo parsing is async (R2 uploads)

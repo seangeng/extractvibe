@@ -5,6 +5,15 @@ import type { Env } from "../../env";
 // Types
 // ---------------------------------------------------------------------------
 
+export interface DarkModeInfo {
+  hasDarkClass: boolean;
+  currentTheme: string | null;
+  colorScheme: string;
+  hasThemeToggle: boolean;
+  darkStylesheetFound: boolean;
+  supportsDarkMode: boolean;
+}
+
 export interface FetchRenderOutput {
   // Meta
   meta: Record<string, string>;
@@ -29,6 +38,9 @@ export interface FetchRenderOutput {
   cssCustomProperties: Record<string, string>;
   shadows: Array<{ value: string; selector: string }>;
   gradients: Array<{ value: string; selector: string }>;
+
+  // Dark mode detection
+  darkModeInfo: DarkModeInfo;
 
   // Icons & logos
   icons: Array<{ rel: string; href: string; sizes?: string; type?: string }>;
@@ -133,6 +145,15 @@ interface DomExtractionResult {
     sampleIcons: string[];
     source: string;
   } | null;
+
+  darkModeInfo: {
+    hasDarkClass: boolean;
+    currentTheme: string | null;
+    colorScheme: string;
+    hasThemeToggle: boolean;
+    darkStylesheetFound: boolean;
+    supportsDarkMode: boolean;
+  };
 
   html: string;
 }
@@ -770,6 +791,80 @@ function extractDom(): DomExtractionResult {
 
   const html = document.documentElement.outerHTML;
 
+  // ---- Detect dark mode implementation ----
+
+  const darkModeInfo = (() => {
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+
+    // 1. Class-based: .dark, .theme-dark, .dark-mode, .dark-theme
+    const darkClasses = ['dark', 'theme-dark', 'dark-mode', 'dark-theme', 'night'];
+    const hasDarkClass = darkClasses.some(cls =>
+      htmlEl.classList.contains(cls) || bodyEl.classList.contains(cls)
+    );
+
+    // 2. Data attribute-based: data-theme, data-mode, data-color-scheme, data-color-mode
+    const darkAttrs = [
+      { el: htmlEl, attr: 'data-theme' },
+      { el: htmlEl, attr: 'data-mode' },
+      { el: htmlEl, attr: 'data-color-scheme' },
+      { el: htmlEl, attr: 'data-color-mode' },
+      { el: bodyEl, attr: 'data-theme' },
+      { el: bodyEl, attr: 'data-mode' },
+    ];
+    const currentThemeAttr = darkAttrs.find(({ el, attr }) => el.getAttribute(attr));
+    const currentTheme = currentThemeAttr
+      ? currentThemeAttr.el.getAttribute(currentThemeAttr.attr)
+      : null;
+
+    // 3. CSS color-scheme property
+    const colorScheme = getComputedStyle(htmlEl).colorScheme || '';
+
+    // 4. Check for dark mode toggle elements (buttons/switches with common patterns)
+    const toggleSelectors = [
+      '[aria-label*="dark" i]', '[aria-label*="theme" i]', '[aria-label*="mode" i]',
+      'button[class*="theme" i]', 'button[class*="dark" i]', 'button[class*="mode" i]',
+      '[data-testid*="theme" i]', '[data-testid*="dark" i]',
+    ];
+    const hasThemeToggle = toggleSelectors.some(sel => {
+      try { return document.querySelector(sel) !== null; } catch { return false; }
+    });
+
+    // 5. Check if dark-mode stylesheets/rules exist (without toggling)
+    let darkStylesheetFound = false;
+    try {
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            const ruleText = rule.cssText || '';
+            if (ruleText.includes('prefers-color-scheme: dark') ||
+                ruleText.includes('.dark') ||
+                ruleText.includes('[data-theme="dark"]') ||
+                ruleText.includes('[data-mode="dark"]') ||
+                ruleText.includes('[data-color-scheme="dark"]') ||
+                ruleText.includes('[data-color-mode="dark"]') ||
+                ruleText.includes('.theme-dark') ||
+                ruleText.includes('.dark-mode') ||
+                ruleText.includes('.dark-theme')) {
+              darkStylesheetFound = true;
+              break;
+            }
+          }
+        } catch { /* CORS */ }
+        if (darkStylesheetFound) break;
+      }
+    } catch { /* ignore */ }
+
+    return {
+      hasDarkClass,
+      currentTheme,
+      colorScheme,
+      hasThemeToggle,
+      darkStylesheetFound,
+      supportsDarkMode: hasDarkClass || !!currentTheme || colorScheme.includes('dark') || hasThemeToggle || darkStylesheetFound,
+    };
+  })();
+
   return {
     meta,
     title,
@@ -789,6 +884,7 @@ function extractDom(): DomExtractionResult {
     manifestUrl,
     designAssets,
     iconLibrary,
+    darkModeInfo,
     html,
   };
 }
@@ -1159,6 +1255,14 @@ export async function fetchAndRender(
     cssCustomProperties: {},
     shadows: [],
     gradients: [],
+    darkModeInfo: {
+      hasDarkClass: false,
+      currentTheme: null,
+      colorScheme: "",
+      hasThemeToggle: false,
+      darkStylesheetFound: false,
+      supportsDarkMode: false,
+    },
     icons: [],
     logoImages: [],
     inlineSvgs: [],
@@ -1215,6 +1319,14 @@ export async function fetchAndRender(
         manifestUrl: null,
         designAssets: [],
         iconLibrary: null,
+        darkModeInfo: {
+          hasDarkClass: false,
+          currentTheme: null,
+          colorScheme: "",
+          hasThemeToggle: false,
+          darkStylesheetFound: false,
+          supportsDarkMode: false,
+        },
         html: "",
       };
     }
@@ -1303,6 +1415,9 @@ export async function fetchAndRender(
       cssCustomProperties: stylesResult.cssCustomProperties,
       shadows: stylesResult.shadows,
       gradients: stylesResult.gradients,
+
+      // Dark mode detection
+      darkModeInfo: domResult.darkModeInfo,
 
       // Icons & logos
       icons: domResult.icons,

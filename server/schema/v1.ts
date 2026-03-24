@@ -32,6 +32,8 @@ export interface ColorValue {
   hex?: string;
   /** RGB breakdown */
   rgb?: RGB;
+  /** Human-readable color name, e.g. "Royal Blue", "Charcoal" */
+  name?: string;
   /** Semantic role this color plays, e.g. "primary", "CTA background" */
   role?: string;
   /** Where the color was found: CSS variable name, selector, meta tag, etc. */
