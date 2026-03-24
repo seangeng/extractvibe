@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { CodeBlock } from "~/components/docs/code-block";
 import { api } from "~/lib/api";
 import type { Extraction } from "~/lib/types";
 
@@ -157,6 +158,27 @@ export default function UsagePage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              Check credits via API
+            </summary>
+            <div className="mt-3 space-y-3">
+              <CodeBlock
+                code={`# Check your credit balance
+curl https://extractvibe.com/api/credits \\
+  -H "x-api-key: ev_your_key"
+
+# Response: { "credits": 47, "plan": "free" }`}
+                language="bash"
+                title="Credits endpoint"
+              />
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>

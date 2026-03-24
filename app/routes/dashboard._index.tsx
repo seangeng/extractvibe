@@ -23,6 +23,7 @@ import {
 import { api } from "~/lib/api";
 import type { Extraction, ApiKeyItem } from "~/lib/types";
 import { StatusBadge } from "~/components/status-badge";
+import { CodeBlock } from "~/components/docs/code-block";
 
 export function meta() {
   return [{ title: "Dashboard — ExtractVibe" }];
@@ -139,6 +140,21 @@ export default function DashboardIndex() {
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </form>
+              <details className="mt-4">
+                <summary className="cursor-pointer text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                  Or use the API →
+                </summary>
+                <div className="mt-3">
+                  <CodeBlock
+                    code={`curl -X POST https://extractvibe.com/api/extract \\
+  -H "x-api-key: ev_your_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "https://stripe.com"}'`}
+                    language="bash"
+                    title="Quick start"
+                  />
+                </div>
+              </details>
             </div>
           </div>
         </CardContent>

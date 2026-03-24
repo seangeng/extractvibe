@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import { CodeBlock } from "~/components/docs/code-block";
 import { api } from "~/lib/api";
 import { cn } from "~/lib/utils";
 
@@ -457,6 +458,38 @@ export default function ExtractPage() {
                   Extract Another
                 </Button>
               </div>
+            )}
+
+            {complete && jobId && (
+              <details className="mt-6 rounded-xl border border-[hsl(var(--border))] p-4">
+                <summary className="cursor-pointer text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                  Retrieve via API
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Fetch this same result programmatically:
+                  </p>
+                  <CodeBlock
+                    code={`# Get the full brand kit JSON
+curl https://extractvibe.com/api/extract/${jobId}/result \\
+  -H "x-api-key: ev_your_key"
+
+# Export as CSS variables
+curl https://extractvibe.com/api/extract/${jobId}/export/css \\
+  -H "x-api-key: ev_your_key"
+
+# Export as Tailwind theme
+curl https://extractvibe.com/api/extract/${jobId}/export/tailwind \\
+  -H "x-api-key: ev_your_key"
+
+# Export as design tokens (W3C format)
+curl https://extractvibe.com/api/extract/${jobId}/export/tokens \\
+  -H "x-api-key: ev_your_key"`}
+                    language="bash"
+                    title="Retrieve result"
+                  />
+                </div>
+              </details>
             )}
           </CardContent>
         </Card>

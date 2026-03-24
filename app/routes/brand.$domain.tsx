@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
-import { Globe, CheckCircle2, XCircle } from "lucide-react";
+import { Globe, CheckCircle2, XCircle, Code2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
+import { CodeBlock } from "~/components/docs/code-block";
 import { MarketingFooter } from "~/components/marketing-layout";
 import type { Route } from "./+types/brand.$domain";
 import type {
@@ -327,6 +328,98 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── Developer Access ────────────────────────────────────────────────────
+
+function DeveloperAccess({ domain, jobId }: { domain: string; jobId?: string }) {
+  const [tab, setTab] = useState(0);
+
+  const resultEndpoint = jobId
+    ? `https://extractvibe.com/api/extract/${jobId}/result`
+    : `https://extractvibe.com/api/brand/${domain}`;
+
+  const tabs = [
+    {
+      label: "cURL",
+      language: "bash",
+      code: `# Fetch the full brand kit
+curl ${resultEndpoint} \\
+  -H "x-api-key: ev_your_key"
+
+# Export as CSS variables
+curl ${resultEndpoint.replace("/result", "/export/css").replace(`/brand/${domain}`, "/extract/JOB_ID/export/css")} \\
+  -H "x-api-key: ev_your_key"
+
+# Export as Tailwind config
+curl ${resultEndpoint.replace("/result", "/export/tailwind").replace(`/brand/${domain}`, "/extract/JOB_ID/export/tailwind")} \\
+  -H "x-api-key: ev_your_key"`,
+    },
+    {
+      label: "JavaScript",
+      language: "javascript",
+      code: `const res = await fetch("${resultEndpoint}", {
+  headers: { "x-api-key": "ev_your_key" },
+});
+const kit = await res.json();
+
+// Access brand data
+console.log(kit.colors.semantic.lightMode);  // { primary, secondary, accent, ... }
+console.log(kit.typography.families);         // [{ name, weights, source }]
+console.log(kit.voice.toneSpectrum);          // { formal, playful, ... }
+console.log(kit.vibe.tags);                   // ["minimal", "technical", ...]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      code: `import requests
+
+kit = requests.get("${resultEndpoint}",
+    headers={"x-api-key": "ev_your_key"}).json()
+
+# Access brand data
+print(kit["colors"]["semantic"]["lightMode"])  # primary, secondary, accent...
+print(kit["typography"]["families"])            # font names, weights, sources
+print(kit["voice"]["toneSpectrum"])             # formal, playful, technical...
+print(kit["vibe"]["tags"])                      # minimal, technical, clean...`,
+    },
+  ];
+
+  return (
+    <section className="mx-auto max-w-4xl px-4 sm:px-6 py-12">
+      <details className="rounded-xl border border-[hsl(var(--border))] p-5">
+        <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium">
+          <Code2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          Developer Access
+        </summary>
+        <div className="mt-4">
+          <div className="flex gap-1 rounded-lg bg-[hsl(var(--muted))] p-1">
+            {tabs.map((t, i) => (
+              <button
+                key={t.label}
+                onClick={() => setTab(i)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  tab === i
+                    ? "bg-[hsl(var(--background))] text-[hsl(var(--foreground))] shadow-sm"
+                    : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3">
+            <CodeBlock
+              code={tabs[tab].code}
+              language={tabs[tab].language}
+              title={tabs[tab].label}
+            />
+          </div>
+        </div>
+      </details>
+    </section>
   );
 }
 
@@ -809,6 +902,10 @@ export default function PublicBrandPage({
             </section>
           </>
         )}
+
+        {/* ─── Developer Access ───────────────────────────────────────── */}
+        <hr className="border-[hsl(var(--border))]" />
+        <DeveloperAccess domain={domain} />
 
         {/* ─── CTA ────────────────────────────────────────────────────── */}
         <hr className="border-[hsl(var(--border))]" />

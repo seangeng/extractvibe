@@ -21,6 +21,120 @@ import {
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { api } from "~/lib/api";
+import { CodeBlock } from "~/components/docs/code-block";
+
+function ApiSnippets({ apiKey }: { apiKey?: string }) {
+  const [tab, setTab] = useState(0);
+  const key = apiKey || "YOUR_API_KEY";
+
+  const tabs = [
+    {
+      label: "cURL",
+      language: "bash",
+      code: `# 1. Start an extraction
+curl -X POST https://extractvibe.com/api/extract \\
+  -H "x-api-key: ${key}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "https://stripe.com"}'
+
+# Response: { "jobId": "abc-123", "domain": "stripe.com" }
+
+# 2. Poll until complete (typically 15-30s)
+curl https://extractvibe.com/api/extract/JOB_ID \\
+  -H "x-api-key: ${key}"
+
+# 3. Get the brand kit
+curl https://extractvibe.com/api/extract/JOB_ID/result \\
+  -H "x-api-key: ${key}"`,
+    },
+    {
+      label: "JavaScript",
+      language: "javascript",
+      code: `const API_KEY = "${key}";
+const BASE = "https://extractvibe.com/api";
+
+// 1. Start extraction
+const { jobId } = await fetch(\`\${BASE}/extract\`, {
+  method: "POST",
+  headers: {
+    "x-api-key": API_KEY,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ url: "https://stripe.com" }),
+}).then(r => r.json());
+
+// 2. Poll until complete
+let status;
+do {
+  await new Promise(r => setTimeout(r, 3000));
+  status = await fetch(\`\${BASE}/extract/\${jobId}\`, {
+    headers: { "x-api-key": API_KEY },
+  }).then(r => r.json());
+} while (status.status?.status === "running");
+
+// 3. Get the brand kit
+const brandKit = await fetch(\`\${BASE}/extract/\${jobId}/result\`, {
+  headers: { "x-api-key": API_KEY },
+}).then(r => r.json());
+
+console.log(brandKit.colors, brandKit.typography, brandKit.voice);`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      code: `import requests, time
+
+API_KEY = "${key}"
+BASE = "https://extractvibe.com/api"
+
+# 1. Start extraction
+job = requests.post(f"{BASE}/extract",
+    headers={"x-api-key": API_KEY},
+    json={"url": "https://stripe.com"}).json()
+
+# 2. Poll until complete
+while True:
+    status = requests.get(f"{BASE}/extract/{job['jobId']}",
+        headers={"x-api-key": API_KEY}).json()
+    if status["status"]["status"] != "running":
+        break
+    time.sleep(3)
+
+# 3. Get the brand kit
+kit = requests.get(f"{BASE}/extract/{job['jobId']}/result",
+    headers={"x-api-key": API_KEY}).json()
+
+print(kit["colors"], kit["typography"], kit["voice"])`,
+    },
+  ];
+
+  return (
+    <div>
+      <div className="flex gap-1 border-b border-neutral-800">
+        {tabs.map((t, i) => (
+          <button
+            key={t.label}
+            onClick={() => setTab(i)}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              tab === i
+                ? "border-b-2 border-[hsl(var(--primary))] text-[hsl(var(--foreground))]"
+                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3">
+        <CodeBlock
+          code={tabs[tab].code}
+          language={tabs[tab].language}
+          title={tabs[tab].label}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function meta() {
   return [{ title: "API Keys — ExtractVibe" }];
@@ -305,29 +419,27 @@ export default function KeysPage() {
         </CardContent>
       </Card>
 
-      {/* API Usage Note */}
+      {/* API Usage Examples */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start gap-3">
-            <Shield className="mt-0.5 h-5 w-5 text-[hsl(var(--muted-foreground))]" />
-            <div>
-              <p className="text-sm font-medium">API Usage</p>
-              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-                Include your API key in the{" "}
-                <code className="rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 font-mono text-xs">
-                  x-api-key
-                </code>{" "}
-                header of your requests. Keep your keys secure and never share
-                them publicly.
-              </p>
-              <pre className="mt-3 overflow-x-auto rounded-md bg-[hsl(var(--muted))] px-4 py-3 font-mono text-xs">
-{`curl -X POST https://extractvibe.com/api/extract \\
-  -H "x-api-key: your_api_key_here" \\
-  -H "Content-Type: application/json" \\
-  -d '{"url": "https://example.com"}'`}
-              </pre>
-            </div>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Shield className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
+            API Usage
+          </CardTitle>
+          <CardDescription>
+            Include your API key in the{" "}
+            <code className="rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 font-mono text-xs">
+              x-api-key
+            </code>{" "}
+            header of your requests.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ApiSnippets apiKey={newKeyValue ?? undefined} />
+          <p className="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
+            <Shield className="mr-1 inline-block h-3 w-3" />
+            Keep your keys secure and never share them publicly.
+          </p>
         </CardContent>
       </Card>
     </div>

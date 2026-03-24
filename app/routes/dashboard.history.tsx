@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { CodeBlock } from "~/components/docs/code-block";
 import { api } from "~/lib/api";
 import type { Extraction } from "~/lib/types";
 import { StatusBadge } from "~/components/status-badge";
@@ -170,6 +171,33 @@ export default function HistoryPage() {
               </table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              Fetch history via API
+            </summary>
+            <div className="mt-3 space-y-3">
+              <CodeBlock
+                code={`# List your extraction history
+curl https://extractvibe.com/api/extract/history \\
+  -H "x-api-key: ev_your_key"
+
+# Get a specific result by job ID
+curl https://extractvibe.com/api/extract/JOB_ID/result \\
+  -H "x-api-key: ev_your_key"
+
+# Look up a brand by domain (cached, no credit cost)
+curl https://extractvibe.com/api/brand/stripe.com \\
+  -H "x-api-key: ev_your_key"`}
+                language="bash"
+                title="API endpoints"
+              />
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>
