@@ -118,6 +118,14 @@ export interface FetchRenderOutput {
     context: string;
     isDesignAsset: boolean;
   }>;
+  /** Detected icon library */
+  iconLibrary?: {
+    name: string;
+    version?: string;
+    confidence: number;
+    sampleIcons: string[];
+    source: string;
+  } | null;
 }
 
 // ─── Output ──────────────────────────────────────────────────────────
@@ -133,6 +141,13 @@ export interface ParseVisualOutput {
   effects: BrandEffects;
   designAssets: BrandDesignAsset[];
   ogImage?: string;
+  iconLibrary?: {
+    name: string;
+    version?: string;
+    confidence: number;
+    sampleIcons: string[];
+    source: string;
+  } | null;
 }
 
 // ─── Named CSS Colors (subset of most common) ───────────────────────
@@ -1141,6 +1156,37 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     }
   }
 
+  // --- Corroboration: boost confidence when multiple independent sources agree ---
+  // Group colors by normalized hex, then check if 2+ DIFFERENT source types found it
+  const sourceTypeOf = (source: string): string => {
+    if (source.startsWith("css-var:")) return "css-var";
+    if (source.startsWith("computed:")) return "computed-style";
+    if (source.startsWith("meta:")) return "meta";
+    if (source.startsWith("manifest:")) return "manifest";
+    if (source.startsWith("inferred")) return "inferred";
+    return source;
+  };
+
+  const hexGroups = new Map<string, CollectedColor[]>();
+  for (const c of collectedColors) {
+    const key = c.hex.toLowerCase();
+    const group = hexGroups.get(key);
+    if (group) {
+      group.push(c);
+    } else {
+      hexGroups.set(key, [c]);
+    }
+  }
+
+  for (const group of hexGroups.values()) {
+    const distinctSources = new Set(group.map((c) => sourceTypeOf(c.source)));
+    if (distinctSources.size >= 2) {
+      for (const c of group) {
+        c.confidence = Math.min(c.confidence + 0.1, 1.0);
+      }
+    }
+  }
+
   // --- Deduplicate raw palette (ΔE < 5 in Euclidean RGB) ---
   const deduplicatedPalette: ColorValue[] = [];
   for (const color of Array.from(rawPaletteMap.values())) {
@@ -1279,6 +1325,8 @@ interface FontInfo {
   fallbackStack: string;
   role: FontRole;
   weights: Set<number>;
+  /** Element types where this font was found (for corroboration) */
+  elementTypes: Set<string>;
 }
 
 function parseFontFamily(fontFamilyStr: string): {
@@ -1334,6 +1382,16 @@ function parseTypography(fetchOutput: FetchRenderOutput): BrandTypography {
     const role = selectorToFontRole(selector);
     if (!role) continue;
 
+    // Classify selector into a broad element type for corroboration
+    const selectorLower = selector.toLowerCase();
+    let elementType = "other";
+    if (/^h[1-6]$/.test(selectorLower)) elementType = "heading";
+    else if (selectorLower === "body" || selectorLower === "p") elementType = "body";
+    else if (selectorLower === "nav" || selectorLower.includes("nav")) elementType = "nav";
+    else if (selectorLower.includes("button") || selectorLower.includes("btn")) elementType = "button";
+    else if (selectorLower === "code" || selectorLower === "pre") elementType = "code";
+    else if (selectorLower === "a" || selectorLower.includes("link")) elementType = "link";
+
     // Accumulate font info
     const key = `${primaryName}::${role}`;
     const existing = fontMap.get(key);
@@ -1343,12 +1401,14 @@ function parseTypography(fetchOutput: FetchRenderOutput): BrandTypography {
 
     if (existing) {
       if (weight) existing.weights.add(weight);
+      existing.elementTypes.add(elementType);
     } else {
       fontMap.set(key, {
         primaryName,
         fallbackStack,
         role,
         weights: new Set(weight ? [weight] : []),
+        elementTypes: new Set([elementType]),
       });
     }
 
@@ -1386,6 +1446,18 @@ function parseTypography(fetchOutput: FetchRenderOutput): BrandTypography {
     }
   }
 
+  // Corroboration: boost font confidence if the same family appears in 3+ element types
+  // Merge element types across all roles for each font family name
+  const fontElementTypes = new Map<string, Set<string>>();
+  for (const info of fontMap.values()) {
+    const existing = fontElementTypes.get(info.primaryName);
+    if (existing) {
+      for (const et of info.elementTypes) existing.add(et);
+    } else {
+      fontElementTypes.set(info.primaryName, new Set(info.elementTypes));
+    }
+  }
+
   // Build font families array
   const families: FontFamily[] = [];
   const seenFonts = new Set<string>();
@@ -1401,13 +1473,18 @@ function parseTypography(fetchOutput: FetchRenderOutput): BrandTypography {
       info.primaryName
     );
 
+    // Boost confidence if this font family appears in 3+ distinct element types
+    const allElementTypes = fontElementTypes.get(info.primaryName);
+    const corroborated = allElementTypes !== undefined && allElementTypes.size >= 3;
+    const confidence = corroborated ? Math.min(0.85 + 0.1, 1.0) : 0.85;
+
     families.push({
       name: info.primaryName,
       role: info.role,
       source,
       weights: info.weights.size > 0 ? Array.from(info.weights).sort((a, b) => a - b) : undefined,
       fallbackStack: info.fallbackStack || undefined,
-      confidence: 0.85,
+      confidence,
     });
   }
 
@@ -1952,5 +2029,6 @@ export async function parseVisualIdentity(
     effects: parseEffects(fetchOutput),
     designAssets: rankedDesignAssets,
     ogImage: fetchOutput.ogImage || undefined,
+    iconLibrary: fetchOutput.iconLibrary || undefined,
   };
 }

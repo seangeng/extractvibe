@@ -215,6 +215,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           if (visualData.buttons) kit.buttons = visualData.buttons;
           if (visualData.effects) kit.effects = visualData.effects;
           if (visualData.ogImage) kit.ogImage = visualData.ogImage;
+          if (visualData.iconLibrary) kit.iconLibrary = visualData.iconLibrary;
         }
 
         // Add LoadLogo data
@@ -365,6 +366,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
       gradients: fd.gradients || [],
       ogImage: fd.ogImage || null,
       designAssets: fd.designAssets || [],
+      iconLibrary: fd.iconLibrary || null,
     };
   }
 

@@ -456,6 +456,22 @@ export interface BrandEffects {
   gradients: GradientValue[];
 }
 
+// ─── Icon Library ────────────────────────────────────────────────────
+
+/** Detected icon library used on the site. */
+export interface IconLibrary {
+  /** Library name, e.g. "Font Awesome", "Lucide", "Material Icons" */
+  name: string;
+  /** Library version, if detectable from stylesheet/script URLs */
+  version?: string;
+  /** Detection confidence 0–1 */
+  confidence: number;
+  /** Up to 10 sample icon names found on the page */
+  sampleIcons: string[];
+  /** How the library was detected */
+  source: string;
+}
+
 // ─── Top-Level Brand Kit ─────────────────────────────────────────────
 
 /** The complete brand kit result returned by an ExtractVibe extraction. */
@@ -475,6 +491,8 @@ export interface ExtractVibeBrandKit {
   effects?: BrandEffects;
   designAssets?: BrandDesignAsset[];
   ogImage?: string;
+  /** Detected icon library used on the site */
+  iconLibrary?: IconLibrary | null;
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────
@@ -557,5 +575,6 @@ export function createEmptyBrandKit(url: string): ExtractVibeBrandKit {
     effects: { shadows: [], gradients: [] },
     designAssets: [],
     ogImage: undefined,
+    iconLibrary: null,
   };
 }

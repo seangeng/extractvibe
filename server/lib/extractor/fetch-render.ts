@@ -64,6 +64,15 @@ export interface FetchRenderOutput {
     isDesignAsset: boolean;
   }>;
 
+  // Icon library detection
+  iconLibrary: {
+    name: string;
+    version?: string;
+    confidence: number;
+    sampleIcons: string[];
+    source: string;
+  } | null;
+
   // Screenshot
   screenshot: Uint8Array | null;
 
@@ -116,6 +125,14 @@ interface DomExtractionResult {
     context: string;
     isDesignAsset: boolean;
   }>;
+
+  iconLibrary: {
+    name: string;
+    version?: string;
+    confidence: number;
+    sampleIcons: string[];
+    source: string;
+  } | null;
 
   html: string;
 }
@@ -457,6 +474,298 @@ function extractDom(): DomExtractionResult {
     });
   }
 
+  // ---- Icon library detection ----
+
+  const iconLibrary: DomExtractionResult["iconLibrary"] = (() => {
+    type IconDetection = {
+      name: string;
+      version?: string;
+      confidence: number;
+      sampleIcons: string[];
+      source: string;
+    };
+
+    // --- Check CSS class patterns ---
+
+    // Font Awesome
+    const faElements = document.querySelectorAll(
+      '[class*="fa-"], .fas, .far, .fab, .fal, [class*="fa-solid"], [class*="fa-regular"], [class*="fa-brands"]'
+    );
+    if (faElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      faElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = el.className?.toString() || "";
+        const match = classes.match(/fa-([a-z0-9-]+)/);
+        if (match && match[1] !== "solid" && match[1] !== "regular" && match[1] !== "brands" && match[1] !== "light") {
+          if (!seen.has(match[1])) {
+            seen.add(match[1]);
+            samples.push(match[1]);
+          }
+        }
+      });
+      // Try to detect version from stylesheet URL
+      let version: string | undefined;
+      for (const url of stylesheetUrls) {
+        const vMatch = url.match(/font-?awesome[\/.-]v?(\d+[\d.]*)/i);
+        if (vMatch) { version = vMatch[1]; break; }
+      }
+      return {
+        name: "Font Awesome",
+        version,
+        confidence: Math.min(0.5 + faElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Material Icons
+    const materialElements = document.querySelectorAll(
+      '.material-icons, .material-icons-outlined, .material-icons-round, .material-symbols-outlined, .material-symbols-rounded'
+    );
+    if (materialElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      materialElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const name = (el.textContent ?? "").trim();
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          samples.push(name);
+        }
+      });
+      return {
+        name: "Material Icons",
+        confidence: Math.min(0.5 + materialElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Lucide
+    const lucideElements = document.querySelectorAll('svg[class*="lucide"]');
+    if (lucideElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      lucideElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = (el.className as unknown as { baseVal?: string })?.baseVal || el.getAttribute("class") || "";
+        const match = classes.match(/lucide-([a-z0-9-]+)/);
+        if (match && !seen.has(match[1])) {
+          seen.add(match[1]);
+          samples.push(match[1]);
+        }
+      });
+      return {
+        name: "Lucide",
+        confidence: Math.min(0.5 + lucideElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Heroicons
+    const heroiconSvgs = document.querySelectorAll('svg[data-slot="icon"]');
+    const heroiconParents = document.querySelectorAll('[class*="heroicon"]');
+    const heroiconCount = heroiconSvgs.length + heroiconParents.length;
+    if (heroiconCount > 0) {
+      return {
+        name: "Heroicons",
+        confidence: Math.min(0.5 + heroiconCount * 0.05, 0.95),
+        sampleIcons: [],
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Phosphor
+    const phosphorElements = document.querySelectorAll('[class*="ph-"]');
+    if (phosphorElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      phosphorElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = el.className?.toString() || "";
+        const match = classes.match(/ph-([a-z0-9-]+)/);
+        if (match && match[1] !== "bold" && match[1] !== "fill" && match[1] !== "light" && match[1] !== "thin" && match[1] !== "duotone") {
+          if (!seen.has(match[1])) {
+            seen.add(match[1]);
+            samples.push(match[1]);
+          }
+        }
+      });
+      return {
+        name: "Phosphor",
+        confidence: Math.min(0.5 + phosphorElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Tabler Icons
+    const tablerElements = document.querySelectorAll('svg[class*="tabler-icon"], svg[class*="icon-tabler"]');
+    if (tablerElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      tablerElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = (el.className as unknown as { baseVal?: string })?.baseVal || el.getAttribute("class") || "";
+        const match = classes.match(/(?:tabler-icon|icon-tabler)-([a-z0-9-]+)/);
+        if (match && !seen.has(match[1])) {
+          seen.add(match[1]);
+          samples.push(match[1]);
+        }
+      });
+      return {
+        name: "Tabler Icons",
+        confidence: Math.min(0.5 + tablerElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Bootstrap Icons
+    const biElements = document.querySelectorAll('[class*="bi-"]');
+    if (biElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      biElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = el.className?.toString() || "";
+        const match = classes.match(/bi-([a-z0-9-]+)/);
+        if (match && !seen.has(match[1])) {
+          seen.add(match[1]);
+          samples.push(match[1]);
+        }
+      });
+      return {
+        name: "Bootstrap Icons",
+        confidence: Math.min(0.5 + biElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Ionicons
+    const ionElements = document.querySelectorAll('ion-icon, [class*="ionicon"]');
+    if (ionElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      ionElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const name = el.getAttribute("name") || el.getAttribute("icon") || "";
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          samples.push(name);
+        }
+      });
+      return {
+        name: "Ionicons",
+        confidence: Math.min(0.5 + ionElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Feather Icons
+    const featherElements = document.querySelectorAll('svg[class*="feather"]');
+    if (featherElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      featherElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = (el.className as unknown as { baseVal?: string })?.baseVal || el.getAttribute("class") || "";
+        const match = classes.match(/feather-([a-z0-9-]+)/);
+        if (match && !seen.has(match[1])) {
+          seen.add(match[1]);
+          samples.push(match[1]);
+        }
+      });
+      return {
+        name: "Feather",
+        confidence: Math.min(0.5 + featherElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // Remix Icons
+    const riElements = document.querySelectorAll('[class*="ri-"]');
+    if (riElements.length > 0) {
+      const samples: string[] = [];
+      const seen = new Set<string>();
+      riElements.forEach((el) => {
+        if (samples.length >= 10) return;
+        const classes = el.className?.toString() || "";
+        const match = classes.match(/ri-([a-z0-9-]+)/);
+        if (match && match[1] !== "line" && match[1] !== "fill" && match[1] !== "fw" && match[1] !== "xxs" && match[1] !== "xs" && match[1] !== "sm" && match[1] !== "lg" && match[1] !== "xl" && match[1] !== "xxl") {
+          if (!seen.has(match[1])) {
+            seen.add(match[1]);
+            samples.push(match[1]);
+          }
+        }
+      });
+      return {
+        name: "Remix Icons",
+        confidence: Math.min(0.5 + riElements.length * 0.05, 0.95),
+        sampleIcons: samples,
+        source: "class-pattern",
+      } satisfies IconDetection;
+    }
+
+    // --- Check loaded stylesheets/scripts ---
+
+    for (const url of stylesheetUrls) {
+      const lowerUrl = url.toLowerCase();
+
+      if (lowerUrl.includes("font-awesome") || lowerUrl.includes("fontawesome")) {
+        let version: string | undefined;
+        const vMatch = url.match(/font-?awesome[\/.-]v?(\d+[\d.]*)/i);
+        if (vMatch) version = vMatch[1];
+        return {
+          name: "Font Awesome",
+          version,
+          confidence: 0.8,
+          sampleIcons: [],
+          source: "stylesheet",
+        } satisfies IconDetection;
+      }
+
+      if (lowerUrl.includes("material-icons") || lowerUrl.includes("fonts.googleapis.com/icon")) {
+        return {
+          name: "Material Icons",
+          confidence: 0.8,
+          sampleIcons: [],
+          source: "stylesheet",
+        } satisfies IconDetection;
+      }
+    }
+
+    // Check script tags for icon libraries
+    const scripts = document.querySelectorAll("script[src]");
+    for (let i = 0; i < scripts.length; i++) {
+      const src = (scripts[i].getAttribute("src") || "").toLowerCase();
+      if (src.includes("heroicons")) {
+        return {
+          name: "Heroicons",
+          confidence: 0.7,
+          sampleIcons: [],
+          source: "script",
+        } satisfies IconDetection;
+      }
+      if (src.includes("ionicons")) {
+        return {
+          name: "Ionicons",
+          confidence: 0.7,
+          sampleIcons: [],
+          source: "script",
+        } satisfies IconDetection;
+      }
+    }
+
+    return null;
+  })();
+
   // ---- Raw HTML ----
 
   const html = document.documentElement.outerHTML;
@@ -479,6 +788,7 @@ function extractDom(): DomExtractionResult {
     stylesheetUrls,
     manifestUrl,
     designAssets,
+    iconLibrary,
     html,
   };
 }
@@ -858,6 +1168,7 @@ export async function fetchAndRender(
     manifestUrl: null,
     manifestData: null,
     designAssets: [],
+    iconLibrary: null,
     screenshot: null,
     html: "",
   };
@@ -903,6 +1214,7 @@ export async function fetchAndRender(
         stylesheetUrls: [],
         manifestUrl: null,
         designAssets: [],
+        iconLibrary: null,
         html: "",
       };
     }
@@ -1006,6 +1318,9 @@ export async function fetchAndRender(
 
       // Design assets
       designAssets: domResult.designAssets || [],
+
+      // Icon library
+      iconLibrary: domResult.iconLibrary,
 
       // Screenshot
       screenshot,

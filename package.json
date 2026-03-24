@@ -10,7 +10,9 @@
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b",
     "cf-typegen": "wrangler types",
-    "db:migrate": "echo 'Usage: npx wrangler d1 execute extractvibe-db --remote --file=server/db/migrations/XXXX.sql'"
+    "db:migrate": "echo 'Usage: npx wrangler d1 execute extractvibe-db --remote --file=server/db/migrations/XXXX.sql'",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.4.3",
@@ -58,6 +60,7 @@
     "typescript": "^5.8.3",
     "vite": "^6.0.0",
     "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.1.1",
     "wrangler": "^4.21.0"
   }
 }
