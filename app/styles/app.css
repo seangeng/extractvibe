@@ -103,6 +103,11 @@
   50% { opacity: 0.35; }
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 @layer utilities {
   @media (prefers-reduced-motion: no-preference) {
     .animate-fade-up {

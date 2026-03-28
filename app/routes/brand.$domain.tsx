@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router";
-import { Globe, Check, X, Code2 } from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Link, useRevalidator } from "react-router";
+import { Globe, Check, X, Code2, Loader2, Eye, Braces, Copy, ChevronDown, ChevronRight, Download } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
@@ -23,14 +23,151 @@ import type {
   BrandDesignAsset,
 } from "../../server/schema/v1";
 
+// Stale-while-revalidate: serve cached data but re-extract after 7 days
+const STALE_AFTER = 60 * 60 * 24 * 7;
+
 // ─── SSR Loader ──────────────────────────────────────────────────────────
 
-export async function loader({ params, context }: Route.LoaderArgs) {
-  const domain = params.domain;
+// Max public auto-extractions per IP per day
+const MAX_PUBLIC_EXTRACTIONS_PER_IP = 5;
+// Max public auto-extractions globally per hour (cost budget)
+const MAX_PUBLIC_EXTRACTIONS_PER_HOUR = 30;
+
+export async function loader({ params, context, request }: Route.LoaderArgs) {
+  const domain = params.domain!;
   const env = context.cloudflare.env;
-  const cached = await env.CACHE.get(`brand:${domain}`, "json");
-  if (!cached) throw new Response("Brand not found", { status: 404 });
-  return { kit: cached as ExtractVibeBrandKit, domain: domain! };
+
+  // Block obviously invalid or private domains
+  if (isPrivateDomain(domain)) {
+    throw new Response("Not found", { status: 404 });
+  }
+
+  // Check for cached brand kit with metadata
+  const [cached, metaJson] = await Promise.all([
+    env.CACHE.get(`brand:${domain}`, "json"),
+    env.CACHE.get(`brand:${domain}:meta`, "json"),
+  ]);
+
+  const meta = metaJson as { extractedAt: number; jobId: string } | null;
+
+  if (cached) {
+    // Stale-while-revalidate: serve cached data, trigger background re-extract if stale
+    const age = meta?.extractedAt ? (Date.now() - meta.extractedAt) / 1000 : Infinity;
+    if (age > STALE_AFTER) {
+      const ctx = context.cloudflare.ctx;
+      ctx.waitUntil(triggerExtraction(env, domain));
+    }
+    return { kit: cached as ExtractVibeBrandKit, domain, status: "ready" as const, jobId: null };
+  }
+
+  // No cache — check if there's already an extraction in progress
+  const existing = await env.DB.prepare(
+    `SELECT id, status FROM extraction WHERE domain = ? AND status IN ('queued', 'running') ORDER BY "createdAt" DESC LIMIT 1`
+  ).bind(domain).first<{ id: string; status: string }>();
+
+  if (existing) {
+    return { kit: null, domain, status: "extracting" as const, jobId: existing.id };
+  }
+
+  // ── Rate limits before auto-starting ──
+
+  // 1. Per-domain: max 3 per hour
+  const domainCount = await env.DB.prepare(
+    `SELECT COUNT(*) as cnt FROM extraction WHERE domain = ? AND "createdAt" > datetime('now', '-1 hour')`
+  ).bind(domain).first<{ cnt: number }>();
+
+  if (domainCount && domainCount.cnt >= 3) {
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+  }
+
+  // 2. Per-IP: max 5 per day (prevent one visitor from triggering many domains)
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const ipKey = `public-extract:${ip}`;
+  const ipCountRaw = await env.CACHE.get(ipKey);
+  const ipCount = ipCountRaw ? parseInt(ipCountRaw, 10) : 0;
+
+  if (ipCount >= MAX_PUBLIC_EXTRACTIONS_PER_IP) {
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+  }
+
+  // 3. Global hourly budget (prevent mass abuse across all domains)
+  const globalKey = "public-extract:global:hour";
+  const globalCountRaw = await env.CACHE.get(globalKey);
+  const globalCount = globalCountRaw ? parseInt(globalCountRaw, 10) : 0;
+
+  if (globalCount >= MAX_PUBLIC_EXTRACTIONS_PER_HOUR) {
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+  }
+
+  // All checks passed — start extraction and increment counters
+  const jobId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO extraction (id, "userId", domain, url, status, "schemaVersion", "createdAt")
+     VALUES (?, ?, ?, ?, 'queued', 'v1', datetime('now'))`
+  ).bind(jobId, `public:brand-page`, domain, `https://${domain}`).run();
+
+  await env.EXTRACT_BRAND.create({
+    id: jobId,
+    params: { url: `https://${domain}`, jobId, userId: `public:brand-page` },
+  });
+
+  // Increment rate limit counters (fire-and-forget)
+  const ctx = context.cloudflare.ctx;
+  ctx.waitUntil(Promise.all([
+    env.CACHE.put(ipKey, String(ipCount + 1), { expirationTtl: 86400 }),
+    env.CACHE.put(globalKey, String(globalCount + 1), { expirationTtl: 3600 }),
+  ]));
+
+  return { kit: null, domain, status: "extracting" as const, jobId };
+}
+
+/** Block private IPs, localhost, and obviously invalid domains */
+function isPrivateDomain(domain: string): boolean {
+  const d = domain.toLowerCase();
+  if (d === "localhost" || d.endsWith(".local") || d.endsWith(".internal")) return true;
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(d)) {
+    // IPv4 — block all private ranges
+    const parts = d.split(".").map(Number);
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 0) return true;
+  }
+  // Must have at least one dot (real TLD)
+  if (!d.includes(".")) return true;
+  return false;
+}
+
+async function triggerExtraction(env: Route.LoaderArgs["context"]["cloudflare"]["env"], domain: string): Promise<void> {
+  try {
+    const existing = await env.DB.prepare(
+      `SELECT id FROM extraction WHERE domain = ? AND status IN ('queued', 'running') LIMIT 1`
+    ).bind(domain).first<{ id: string }>();
+    if (existing) return;
+
+    // Check global budget before background re-extraction too
+    const globalKey = "public-extract:global:hour";
+    const globalCountRaw = await env.CACHE.get(globalKey);
+    const globalCount = globalCountRaw ? parseInt(globalCountRaw, 10) : 0;
+    if (globalCount >= MAX_PUBLIC_EXTRACTIONS_PER_HOUR) return;
+
+    const jobId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO extraction (id, "userId", domain, url, status, "schemaVersion", "createdAt")
+       VALUES (?, ?, ?, ?, 'queued', 'v1', datetime('now'))`
+    ).bind(jobId, `system:revalidate`, domain, `https://${domain}`).run();
+
+    await env.EXTRACT_BRAND.create({
+      id: jobId,
+      params: { url: `https://${domain}`, jobId, userId: `system:revalidate` },
+    });
+
+    await env.CACHE.put(globalKey, String(globalCount + 1), { expirationTtl: 3600 });
+  } catch {
+    // Non-fatal — stale data is still served
+  }
 }
 
 // ─── SEO Meta ────────────────────────────────────────────────────────────
@@ -38,6 +175,15 @@ export async function loader({ params, context }: Route.LoaderArgs) {
 export function meta({ data }: Route.MetaArgs) {
   if (!data) return [{ title: "Brand Not Found — ExtractVibe" }];
   const { domain, kit } = data;
+  if (!kit) {
+    return [
+      { title: `${domain} Brand Kit — ExtractVibe` },
+      {
+        name: "description",
+        content: `Extract the brand kit for ${domain}: colors, typography, tone of voice, and more. Powered by ExtractVibe.`,
+      },
+    ];
+  }
   return [
     { title: `${domain} Brand Kit — Colors, Fonts, Voice | ExtractVibe` },
     {
@@ -423,12 +569,380 @@ print(kit["vibe"]["tags"])                      # minimal, technical, clean...`,
   );
 }
 
+// ─── Floating View Toggle ────────────────────────────────────────────────
+
+type ViewMode = "visual" | "json";
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        "fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transition-all",
+        visible
+          ? "translate-y-0 opacity-100"
+          : "translate-y-4 opacity-0"
+      )}
+      style={{ transitionDuration: "400ms", transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)" }}
+    >
+      <div className="flex items-center gap-1 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))]/95 p-1 shadow-lg shadow-black/5 backdrop-blur-xl">
+        <button
+          onClick={() => onChange("visual")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-all",
+            mode === "visual"
+              ? "bg-[hsl(var(--foreground))] text-[hsl(var(--background))] shadow-sm"
+              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+          )}
+          style={{ transitionDuration: "200ms", transitionTimingFunction: "cubic-bezier(0.25, 0.46, 0.45, 0.94)" }}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Visual
+        </button>
+        <button
+          onClick={() => onChange("json")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-all",
+            mode === "json"
+              ? "bg-[hsl(var(--foreground))] text-[hsl(var(--background))] shadow-sm"
+              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+          )}
+          style={{ transitionDuration: "200ms", transitionTimingFunction: "cubic-bezier(0.25, 0.46, 0.45, 0.94)" }}
+        >
+          <Braces className="h-3.5 w-3.5" />
+          JSON
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── JSON / API View ────────────────────────────────────────────────────
+
+function JsonApiView({ kit, domain }: { kit: ExtractVibeBrandKit; domain: string }) {
+  const [copied, setCopied] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(["meta", "identity", "colors", "typography", "voice", "vibe", "rules"])
+  );
+
+  const fullJson = useMemo(() => JSON.stringify(kit, null, 2), [kit]);
+
+  const sections = useMemo(() => {
+    const keys = Object.keys(kit) as (keyof ExtractVibeBrandKit)[];
+    return keys
+      .filter((k) => kit[k] !== undefined && kit[k] !== null)
+      .map((key) => ({
+        key,
+        json: JSON.stringify(kit[key], null, 2),
+        lineCount: JSON.stringify(kit[key], null, 2).split("\n").length,
+      }));
+  }, [kit]);
+
+  const handleCopyAll = useCallback(() => {
+    navigator.clipboard.writeText(fullJson);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [fullJson]);
+
+  const handleCopySection = useCallback((json: string) => {
+    navigator.clipboard.writeText(json);
+  }, []);
+
+  const toggleSection = useCallback((key: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([fullJson], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${domain}-brand-kit.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [fullJson, domain]);
+
+  const sectionLabels: Record<string, string> = {
+    meta: "Metadata",
+    identity: "Identity",
+    logos: "Logos",
+    ogImage: "OG Image",
+    colors: "Colors",
+    typography: "Typography",
+    spacing: "Spacing",
+    buttons: "Buttons",
+    effects: "Effects",
+    designAssets: "Design Assets",
+    voice: "Voice & Tone",
+    rules: "Brand Rules",
+    vibe: "Vibe",
+    officialGuidelines: "Official Guidelines",
+    iconLibrary: "Icon Library",
+  };
+
+  return (
+    <div className="min-h-screen bg-neutral-950 pb-24">
+      {/* Sticky toolbar */}
+      <div className="sticky top-[65px] z-40 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xs text-neutral-500">
+              {domain}
+            </span>
+            <span className="text-neutral-700">/</span>
+            <span className="font-mono text-xs text-neutral-400">
+              brand-kit.json
+            </span>
+            <span className="rounded-md bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
+              v1
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-300"
+            >
+              <Download className="h-3 w-3" />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+            <button
+              onClick={handleCopyAll}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-300"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              <span className="hidden sm:inline">{copied ? "Copied" : "Copy all"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* API quick reference */}
+      <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <span className="shrink-0 rounded bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] font-medium text-emerald-400">
+              GET
+            </span>
+            <code className="min-w-0 break-all font-mono text-xs text-neutral-300">
+              https://extractvibe.com/api/brand/{domain}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(`curl https://extractvibe.com/api/brand/${domain}`)}
+              className="ml-auto shrink-0 rounded-md p-1.5 text-neutral-600 transition-colors hover:bg-neutral-800 hover:text-neutral-400"
+              aria-label="Copy curl command"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sections */}
+      <div className="mx-auto max-w-4xl px-4 pt-4 sm:px-6">
+        <div className="divide-y divide-neutral-800 rounded-xl border border-neutral-800 bg-neutral-900/30">
+          {sections.map(({ key, json, lineCount }) => {
+            const expanded = expandedSections.has(key);
+            return (
+              <div key={key}>
+                <button
+                  onClick={() => toggleSection(key)}
+                  className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-800/30"
+                >
+                  {expanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-neutral-600" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-neutral-600" />
+                  )}
+                  <span className="font-mono text-sm text-sky-400">
+                    &quot;{key}&quot;
+                  </span>
+                  <span className="font-mono text-xs text-neutral-600">
+                    {sectionLabels[key] || key}
+                  </span>
+                  <span className="ml-auto font-mono text-[10px] text-neutral-700">
+                    {lineCount} lines
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopySection(json);
+                    }}
+                    className="rounded p-1 text-neutral-700 opacity-0 transition-all hover:bg-neutral-700 hover:text-neutral-400 group-hover:opacity-100"
+                    aria-label={`Copy ${key}`}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </button>
+                {expanded && (
+                  <div className="border-t border-neutral-800/50 bg-neutral-950/50">
+                    <pre className="overflow-x-auto px-4 py-3 text-[13px] leading-relaxed">
+                      <code
+                        className="font-mono text-neutral-300"
+                        dangerouslySetInnerHTML={{ __html: highlightJsonString(json) }}
+                      />
+                    </pre>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Export formats */}
+      <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+        <p className="mb-3 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-600">
+          Export formats
+        </p>
+        <div className="grid gap-2 sm:grid-cols-4">
+          {["css", "tailwind", "markdown", "tokens"].map((fmt) => (
+            <a
+              key={fmt}
+              href={`/api/brand/${domain}`}
+              onClick={(e) => {
+                e.preventDefault();
+                // Can't export from /brand endpoint — show the format name
+              }}
+              className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/30 px-3 py-2.5 font-mono text-xs text-neutral-400 transition-colors hover:border-neutral-700 hover:text-neutral-300"
+            >
+              <Download className="h-3 w-3 text-neutral-600" />
+              .{fmt}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Inline JSON syntax highlighter for the collapsible view */
+function highlightJsonString(code: string): string {
+  return code.split("\n").map(line => {
+    const escaped = line
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return escaped
+      .replace(/^(\s*)("[\w\-]+")(:\s)/gm, '$1<span class="text-sky-400">$2</span>$3')
+      .replace(/(:\s*)("(?:[^"\\]|\\.)*")/g, '$1<span class="text-emerald-400">$2</span>')
+      .replace(/(:\s*)(\d+(?:\.\d+)?)/g, '$1<span class="text-amber-400">$2</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="text-violet-400">$1</span>');
+  }).join("\n");
+}
+
 // ─── Page Component ──────────────────────────────────────────────────────
 
 export default function PublicBrandPage({
   loaderData,
 }: Route.ComponentProps) {
-  const { kit, domain } = loaderData;
+  const { kit, domain, status, jobId } = loaderData;
+  const revalidator = useRevalidator();
+  const [viewMode, setViewMode] = useState<ViewMode>("visual");
+
+  // Poll for extraction completion when in extracting state
+  useEffect(() => {
+    if (status !== "extracting" || !jobId) return;
+    let cancelled = false;
+    const poll = async () => {
+      while (!cancelled) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (cancelled) break;
+        try {
+          const res = await fetch(`/api/extract/${jobId}`);
+          if (!res.ok) continue;
+          const data = await res.json() as { status: string };
+          if (data.status === "complete") {
+            revalidator.revalidate();
+            return;
+          }
+          if (data.status === "failed" || data.status === "error") {
+            return; // Stop polling on failure
+          }
+        } catch {
+          // Network error — keep polling
+        }
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [status, jobId, revalidator]);
+
+  if (!kit) {
+    const isExtracting = status === "extracting";
+    const isRateLimited = status === "rate_limited";
+    return (
+      <div className="min-h-screen bg-[hsl(var(--background))]">
+        <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
+          <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+            <Link to="/" className="flex items-center gap-2">
+              <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-8 w-8" />
+              <span className="text-lg font-bold">ExtractVibe</span>
+            </Link>
+            <Button asChild size="sm">
+              <Link to="/sign-up">Get started</Link>
+            </Button>
+          </div>
+        </nav>
+
+        <div className="mx-auto max-w-4xl px-6 py-24 text-center md:py-32">
+          {isExtracting ? (
+            <>
+              <Loader2 className="mx-auto h-10 w-10 animate-spin text-[hsl(var(--muted-foreground))]" />
+              <h1 className="mt-6 font-display text-2xl font-bold tracking-tight md:text-3xl">
+                Extracting {domain}
+              </h1>
+              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Analyzing colors, typography, voice, and more. This usually takes 30–60 seconds.
+              </p>
+              <div className="mx-auto mt-10 h-1 w-48 overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                <div className="h-full w-1/3 animate-[shimmer_1.5s_ease-in-out_infinite] rounded-full bg-[hsl(var(--foreground))]/20" />
+              </div>
+            </>
+          ) : isRateLimited ? (
+            <>
+              <Globe className="mx-auto h-10 w-10 text-[hsl(var(--muted-foreground))]" />
+              <h1 className="mt-6 font-display text-2xl font-bold tracking-tight md:text-3xl">
+                {domain}
+              </h1>
+              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+                This brand has been requested recently. Please try again in a few minutes.
+              </p>
+            </>
+          ) : (
+            <>
+              <Globe className="mx-auto h-10 w-10 text-[hsl(var(--muted-foreground))]" />
+              <h1 className="mt-6 font-display text-2xl font-bold tracking-tight md:text-3xl">
+                {domain}
+              </h1>
+              <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+                Something went wrong starting the extraction. Try again later.
+              </p>
+            </>
+          )}
+        </div>
+
+        <MarketingFooter />
+      </div>
+    );
+  }
+
   const { identity, colors, typography, voice, rules, vibe } = kit;
 
   const brandName = cleanBrandName(identity?.brandName);
@@ -453,13 +967,18 @@ export default function PublicBrandPage({
       (vibe.comparableBrands && vibe.comparableBrands.length > 0));
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))]">
+    <div className={cn("min-h-screen", viewMode === "json" ? "bg-neutral-950" : "bg-[hsl(var(--background))]")}>
       {/* ─── Header ───────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
+      <nav className={cn(
+        "sticky top-0 z-50 border-b backdrop-blur-md",
+        viewMode === "json"
+          ? "border-neutral-800 bg-neutral-950/80"
+          : "border-[hsl(var(--border))] bg-[hsl(var(--background))]/80"
+      )}>
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2">
             <img src="/extract-vibe-logo.svg" alt="ExtractVibe" className="h-8 w-8" />
-            <span className="text-lg font-bold">ExtractVibe</span>
+            <span className={cn("text-lg font-bold", viewMode === "json" && "text-neutral-100")}>ExtractVibe</span>
           </Link>
           <Button asChild size="sm">
             <Link to="/sign-up">Extract your brand</Link>
@@ -467,6 +986,12 @@ export default function PublicBrandPage({
         </div>
       </nav>
 
+      <ViewToggle mode={viewMode} onChange={setViewMode} />
+
+      {viewMode === "json" ? (
+        <JsonApiView kit={kit} domain={domain} />
+      ) : (
+      <>
       {/* ─── Hero Banner ──────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         {/* OG image as blurred background tint */}
@@ -926,6 +1451,8 @@ export default function PublicBrandPage({
       </main>
 
       <MarketingFooter />
+      </>
+      )}
     </div>
   );
 }

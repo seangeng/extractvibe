@@ -593,7 +593,7 @@ fetch("/api/credits", { credentials: "include" });`}
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
                   Need help? Open an issue on{" "}
                   <a
-                    href="https://github.com/extractvibe/extractvibe"
+                    href="https://github.com/seangeng/extractvibe"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-[hsl(var(--foreground))] underline underline-offset-4"

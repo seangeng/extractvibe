@@ -61,11 +61,11 @@ const footerColumns: Array<{
       { label: "Authentication", href: "/docs" },
       { label: "CLI", href: "/cli" },
       { label: "Open Source", href: "/open-source" },
-      { label: "GitHub", href: "https://github.com/extractvibe/extractvibe", external: true },
+      { label: "GitHub", href: "https://github.com/seangeng/extractvibe", external: true },
       { label: "OpenAPI Spec", href: "/docs" },
       { label: "SDKs", href: "/docs" },
       { label: "Self-Hosting Guide", href: "/docs" },
-      { label: "Contributing", href: "https://github.com/extractvibe/extractvibe", external: true },
+      { label: "Contributing", href: "https://github.com/seangeng/extractvibe", external: true },
     ],
   },
   {
@@ -159,12 +159,13 @@ function MarketingNav() {
               Pricing
             </Link>
             <a
-              href="https://github.com/extractvibe/extractvibe"
+              href="https://github.com/seangeng/extractvibe"
               target="_blank"
               rel="noopener noreferrer"
-              className="nav-link text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] px-2.5 py-1 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:border-[hsl(var(--foreground))]/20 hover:text-[hsl(var(--foreground))]"
             >
-              GitHub
+              <Github className="h-3.5 w-3.5" />
+              Star
             </a>
           </div>
         </div>
@@ -240,7 +241,7 @@ export function MarketingFooter() {
           </p>
           <div className="flex items-center gap-5">
             <a
-              href="https://github.com/extractvibe/extractvibe"
+              href="https://github.com/seangeng/extractvibe"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"

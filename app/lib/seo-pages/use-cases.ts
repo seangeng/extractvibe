@@ -93,7 +93,7 @@ results.forEach(brand => {
     {
       question: "How many extractions can an agency run per month?",
       answer:
-        "Free accounts get 50 extractions per month, which is enough for initial evaluation. Paid plans scale from 500 to unlimited extractions. Most agencies find that the Starter plan covers their needs, with Pro plans available for high-volume agencies running competitive analyses across multiple clients.",
+        "Free accounts get 500 extractions per month, which is enough for initial evaluation. Paid plans scale from 5,000 to unlimited extractions. Most agencies find that the Starter plan covers their needs, with Pro plans available for high-volume agencies running competitive analyses across multiple clients.",
     },
     {
       question: "Can I white-label ExtractVibe reports for client delivery?",
@@ -176,7 +176,7 @@ export const developersData: SeoPageData = {
       number: "01",
       title: "Get your API key",
       description:
-        "Sign up for a free account and generate an API key from the dashboard. Keys use the ev_ prefix and support up to 50 extractions per month on the free tier.",
+        "Sign up for a free account and generate an API key from the dashboard. Keys use the ev_ prefix and support up to 500 extractions per month on the free tier.",
     },
     {
       number: "02",
@@ -239,7 +239,7 @@ console.log(brandKit.buttons);      // { primary, outline, ghost, ... }`,
     {
       question: "What rate limits apply to the API?",
       answer:
-        "Free accounts are limited to 50 extractions per month and 3 anonymous extractions per day per IP address. Paid plans have higher monthly limits and support concurrent extractions. API keys include rate limit headers (X-RateLimit-Remaining) so you can implement client-side throttling.",
+        "Free accounts are limited to 500 extractions per month and 3 anonymous extractions per day per IP address. Paid plans have higher monthly limits and support concurrent extractions. API keys include rate limit headers (X-RateLimit-Remaining) so you can implement client-side throttling.",
     },
     {
       question: "Is there a Python SDK or CLI?",

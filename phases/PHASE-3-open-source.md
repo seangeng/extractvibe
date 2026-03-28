@@ -105,7 +105,7 @@
 
 ### 3.4 — GitHub Repository
 
-- [ ] Init public repo: `github.com/[org]/extractvibe`
+- [ ] Init public repo: `github.com/seangeng/extractvibe`
 - [ ] Monorepo structure with all packages
 - [ ] `README.md`:
   - [ ] Badges (npm version, license, stars)

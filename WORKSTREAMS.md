@@ -233,7 +233,7 @@ Step 5: Score & Package   → Confidence scoring, schema assembly, cache result
 - [ ] TypeScript types included
 
 ### 3.4 — GitHub Repo & Community
-- [ ] Public repo: `github.com/[org]/extractvibe`
+- [ ] Public repo: `github.com/seangeng/extractvibe`
 - [ ] README with: badges, demo GIF, quick start, feature list, comparison table
 - [ ] CONTRIBUTING.md — how to add new extractors, how to propose schema changes
 - [ ] Issue templates (bug report, feature request, new extractor proposal)

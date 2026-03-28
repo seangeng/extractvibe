@@ -2,10 +2,24 @@ node_modules/
 build/
 .wrangler/
 .react-router/
-.dev.vars
 worker-configuration.d.ts
 *.log
 .DS_Store
+
+# Secrets & local config
+.dev.vars
+.env
+.env.*
 wrangler.jsonc
+
+# IDE
+.idea/
+*.iml
+*.swp
+*.swo
+.vscode/
+
+# Internal docs (not for public repo)
 SEAN_GENERAL_SAAS_CLAUDE.md
 OAUTH_SETUP.md
+PRD.md

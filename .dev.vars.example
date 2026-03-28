@@ -6,3 +6,9 @@ OPENROUTER_API_KEY=sk-or-v1-your-key-here
 # Get one at https://serper.dev — enables Google SERP-based brand guidelines
 # discovery as a fallback when URL probing finds nothing. ~$0.001 per query.
 # SERPER_API_KEY=your-key-here
+
+# Optional: OAuth providers (comment out if not testing social login)
+# GITHUB_CLIENT_ID=
+# GITHUB_CLIENT_SECRET=
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=

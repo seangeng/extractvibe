@@ -169,7 +169,7 @@ export default function ChangelogPage() {
             <div className="flex items-center gap-4">
               <Button asChild variant="outline" size="lg" className="h-12 px-8">
                 <a
-                  href="https://github.com/extractvibe/extractvibe"
+                  href="https://github.com/seangeng/extractvibe"
                   target="_blank"
                   rel="noopener noreferrer"
                 >

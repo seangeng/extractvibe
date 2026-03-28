@@ -91,9 +91,9 @@ CREATE INDEX idx_extraction_status ON extraction(status);
 -- Credits
 CREATE TABLE IF NOT EXISTS "credit" (
     "userId" TEXT PRIMARY KEY NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "balance" INTEGER NOT NULL DEFAULT 50,
+    "balance" INTEGER NOT NULL DEFAULT 500,
     "plan" TEXT NOT NULL DEFAULT 'free',
-    "monthlyAllowance" INTEGER NOT NULL DEFAULT 50,
+    "monthlyAllowance" INTEGER NOT NULL DEFAULT 500,
     "resetAt" TEXT NOT NULL DEFAULT (datetime('now', '+1 month'))
 );
 

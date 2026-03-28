@@ -15,6 +15,28 @@ import { AgentBootstrapRequest } from "../schema/api";
 
 export const apiRouter = new Hono<{ Bindings: Env }>();
 
+/**
+ * Block private, reserved, and loopback hostnames to prevent SSRF.
+ */
+function isPrivateHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, ""); // strip IPv6 brackets
+  // Loopback & special names
+  if (h === "localhost" || h.endsWith(".local") || h === "0.0.0.0" || h === "::1") return true;
+  // IPv4 private/reserved ranges
+  if (/^127\./.test(h)) return true;           // 127.0.0.0/8
+  if (/^10\./.test(h)) return true;            // 10.0.0.0/8
+  if (/^192\.168\./.test(h)) return true;      // 192.168.0.0/16
+  if (/^169\.254\./.test(h)) return true;      // link-local
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return true; // CGN 100.64.0.0/10
+  // 172.16.0.0/12
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  // IPv6 private/reserved
+  if (/^f[cd]/.test(h)) return true;           // fc00::/7 unique local
+  if (/^fe80/.test(h)) return true;            // link-local
+  if (/^ff/.test(h)) return true;              // multicast
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Request logging middleware — logs every API request to the request_log table.
 // Runs AFTER the handler completes so we can capture the status code and latency.
@@ -131,7 +153,7 @@ apiRouter.post("/agent/bootstrap", async (c) => {
   const { agent_name, contact_email } = parsed.data;
 
   // 2. Rate limit: max 3 per IP per 24h using KV
-  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+  const ip = c.req.header("cf-connecting-ip") || "unknown";
   const rlKey = `agent-bootstrap:${ip}`;
   const rlRaw = await c.env.CACHE.get(rlKey);
   const rlCount = rlRaw ? parseInt(rlRaw, 10) : 0;
@@ -158,8 +180,8 @@ apiRouter.post("/agent/bootstrap", async (c) => {
     .bind(userId, agent_name, syntheticEmail)
     .run();
 
-  // 4. Initialize credits: 5 for agent free tier
-  const agentCredits = 5;
+  // 4. Initialize credits for agent free tier
+  const agentCredits = 25;
   await c.env.DB.prepare(
     `INSERT INTO credit ("userId", balance, plan, "monthlyAllowance", "resetAt")
      VALUES (?, ?, 'free', ?, datetime('now', '+1 month'))`
@@ -256,17 +278,7 @@ apiRouter.post("/extract", async (c) => {
       throw new Error("Invalid protocol");
     }
     // Block private/reserved hostnames to prevent SSRF
-    const hostname = parsedUrl.hostname.toLowerCase();
-    if (
-      hostname === "localhost" ||
-      hostname.endsWith(".local") ||
-      hostname.startsWith("127.") ||
-      hostname.startsWith("10.") ||
-      hostname.startsWith("192.168.") ||
-      hostname === "0.0.0.0" ||
-      hostname === "[::1]" ||
-      hostname.startsWith("169.254.")
-    ) {
+    if (isPrivateHostname(parsedUrl.hostname)) {
       return c.json({ error: "Private/internal URLs are not allowed" }, 400);
     }
   } catch {
@@ -377,10 +389,20 @@ apiRouter.get("/brand/:domain", async (c) => {
 // Export — download brand kit in various formats (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/export/:format", async (c) => {
-  await withAuthAndRateLimit(c, "read");
+  const auth = await withAuthAndRateLimit(c, "read");
 
   const jobId = c.req.param("jobId");
   const format = c.req.param("format");
+
+  // Verify the authenticated user owns this extraction
+  const extraction = await c.env.DB.prepare(
+    `SELECT "userId" FROM extraction WHERE id = ?`
+  ).bind(jobId).first<{ userId: string }>();
+
+  if (!extraction || extraction.userId !== auth.userId) {
+    return c.json({ error: "Result not found" }, 404);
+  }
+
   const cached = await c.env.CACHE.get(`result:${jobId}`, "json");
   if (!cached) return c.json({ error: "Result not found" }, 404);
 
@@ -601,9 +623,9 @@ async function getUserCredits(env: Env, userId: string): Promise<number> {
   if (!row) {
     await env.DB.prepare(
       `INSERT INTO credit ("userId", balance, plan, "monthlyAllowance", "resetAt")
-       VALUES (?, 50, 'free', 50, datetime('now', '+1 month'))`
+       VALUES (?, 500, 'free', 500, datetime('now', '+1 month'))`
     ).bind(userId).run();
-    return 50;
+    return 500;
   }
 
   return row.balance;

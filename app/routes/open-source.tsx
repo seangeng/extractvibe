@@ -25,7 +25,7 @@ export function meta() {
 }
 
 const quickStartCode = `# Clone the repository
-git clone https://github.com/extractvibe/extractvibe.git
+git clone https://github.com/seangeng/extractvibe.git
 cd extractvibe
 
 # Install dependencies
@@ -86,7 +86,7 @@ export default function OpenSourcePage() {
           <div className="mt-8 flex items-center gap-4">
             <Button asChild size="lg" className="h-12 px-8">
               <a
-                href="https://github.com/extractvibe/extractvibe"
+                href="https://github.com/seangeng/extractvibe"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -209,7 +209,7 @@ export default function OpenSourcePage() {
             </p>
             <Button asChild variant="outline" className="mt-6" size="sm">
               <a
-                href="https://github.com/extractvibe/extractvibe/labels/good%20first%20issue"
+                href="https://github.com/seangeng/extractvibe/labels/good%20first%20issue"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -264,7 +264,7 @@ export default function OpenSourcePage() {
             </h2>
             <Button asChild size="lg" className="h-12 shrink-0 px-8">
               <a
-                href="https://github.com/extractvibe/extractvibe"
+                href="https://github.com/seangeng/extractvibe"
                 target="_blank"
                 rel="noopener noreferrer"
               >

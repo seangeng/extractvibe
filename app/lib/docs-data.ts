@@ -768,7 +768,7 @@ with open("stripe-variables.css", "w") as f:
     slug: "credits",
     title: "Get credit balance",
     description:
-      "Returns the current credit balance and plan for the authenticated user. Free accounts start with 50 credits that reset monthly.",
+      "Returns the current credit balance and plan for the authenticated user. Free accounts start with 500 credits that reset monthly.",
     auth: "required",
     rateLimit: "Read tier",
     responses: [
@@ -1049,7 +1049,7 @@ print(res.json()["ok"])  # True`,
     slug: "agent-bootstrap",
     title: "Agent bootstrap",
     description:
-      "Lets AI agents and LLMs self-provision an API key without human interaction. Returns a working API key with 5 free credits and a claim URL that a human can use to link the account. Rate limited to 3 requests per IP per day.",
+      "Lets AI agents and LLMs self-provision an API key without human interaction. Returns a working API key with 25 free credits and a claim URL that a human can use to link the account. Rate limited to 3 requests per IP per day.",
     auth: "none",
     rateLimit: "3 per IP per day",
     requestBody: {

@@ -16,19 +16,19 @@ interface RateLimitConfig {
 }
 
 const TIERS: Record<string, RateLimitConfig> = {
-  // Anonymous users — tight limits
+  // Anonymous users — tight limits (sign up to get more)
   "anon:read": { limit: 30, window: 60, prefix: "rl:anon:read" },
   "anon:extract": { limit: 3, window: 86400, prefix: "rl:anon:extract" },
 
-  // Authenticated free tier
-  "free:read": { limit: 60, window: 60, prefix: "rl:free:read" },
-  "free:extract": { limit: 10, window: 60, prefix: "rl:free:extract" },
+  // Authenticated free tier — generous, attribution is the abuse guard
+  "free:read": { limit: 120, window: 60, prefix: "rl:free:read" },
+  "free:extract": { limit: 20, window: 60, prefix: "rl:free:extract" },
 
   // Authenticated paid tiers
-  "starter:read": { limit: 180, window: 60, prefix: "rl:starter:read" },
-  "starter:extract": { limit: 30, window: 60, prefix: "rl:starter:extract" },
+  "starter:read": { limit: 300, window: 60, prefix: "rl:starter:read" },
+  "starter:extract": { limit: 60, window: 60, prefix: "rl:starter:extract" },
   "pro:read": { limit: 600, window: 60, prefix: "rl:pro:read" },
-  "pro:extract": { limit: 60, window: 60, prefix: "rl:pro:extract" },
+  "pro:extract": { limit: 120, window: 60, prefix: "rl:pro:extract" },
 };
 
 /**

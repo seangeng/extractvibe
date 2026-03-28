@@ -5,12 +5,17 @@
 An open-source brand extraction engine that pulls a full brand identity — logos, colors, typography, voice, personality, and actionable brand rules — from any URL. Not just assets. The full vibe.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/seangeng/extractvibe/actions/workflows/ci.yml/badge.svg)](https://github.com/seangeng/extractvibe/actions/workflows/ci.yml)
 [![Deploy to Cloudflare](https://img.shields.io/badge/deploy-Cloudflare%20Workers-F38020)](https://developers.cloudflare.com/workers/)
 [![Live](https://img.shields.io/badge/live-extractvibe.com-8B5CF6)](https://extractvibe.com)
+
+![ExtractVibe landing page](screenshots/landing.png)
 
 ## What it does
 
 ExtractVibe renders a target website using headless Chrome, parses the DOM and computed styles for visual identity data, then runs the extracted content through an LLM pipeline to analyze brand voice, synthesize a personality profile, and generate specific brand usage rules. Every extracted value carries a confidence score. The output is a single structured JSON object covering ~50 fields across 10 categories.
+
+![Brand extraction result for Stripe](screenshots/brand-stripe.png)
 
 ## Example Output
 
@@ -108,7 +113,7 @@ Condensed extraction for `stripe.com`:
 - 5-step Cloudflare Workflow pipeline (fetch/render, parse visual, analyze voice, discover brand kit, synthesize vibe)
 - Real-time extraction progress via WebSocket (Durable Objects)
 - Browser Rendering for JS-heavy sites
-- 72-hour KV caching of extraction results
+- 30-day KV caching with stale-while-revalidate (background re-extraction after 7 days)
 - Asset storage in R2
 - Cron-triggered monthly credit resets
 
@@ -117,7 +122,7 @@ Condensed extraction for `stripe.com`:
 ### Cloud (hosted)
 
 1. Visit [extractvibe.com](https://extractvibe.com)
-2. Sign up — 50 free extractions per month
+2. Sign up — 500 free extractions per month
 3. Enter a URL, get a brand kit
 
 ### Self-Host
@@ -126,11 +131,11 @@ Condensed extraction for `stripe.com`:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/extractvibe/extractvibe.git
+git clone https://github.com/seangeng/extractvibe.git
 cd extractvibe
 
 # 2. Install dependencies
-npm install
+npm install --legacy-peer-deps
 
 # 3. Create Cloudflare resources
 npx wrangler d1 create extractvibe-db
@@ -160,11 +165,9 @@ npm run deploy
 For local development:
 
 ```bash
-# Copy the env example and fill in values
-cp .dev.vars.example .dev.vars
-
-# Start the dev server
-npm run dev
+cp .dev.vars.example .dev.vars    # fill in secrets
+npm run dev                        # starts at localhost:5173
+npm run test                       # verify everything works
 ```
 
 ## API
@@ -174,7 +177,7 @@ npm run dev
 ```bash
 curl -X POST https://extractvibe.com/api/extract \
   -H "Content-Type: application/json" \
-  -H "Cookie: <session>" \
+  -H "x-api-key: ev_..." \
   -d '{"url": "https://stripe.com"}'
 ```
 
@@ -194,6 +197,8 @@ curl https://extractvibe.com/api/extract/:jobId/export/tailwind
 curl https://extractvibe.com/api/extract/:jobId/export/markdown
 curl https://extractvibe.com/api/extract/:jobId/export/tokens
 ```
+
+Full API documentation: [extractvibe.com/docs](https://extractvibe.com/docs)
 
 ## Schema
 
@@ -225,8 +230,7 @@ Full schema definition: [`server/schema/v1.ts`](server/schema/v1.ts)
 | Auth | Better Auth |
 | AI | Gemini 2.5 Flash via OpenRouter |
 | Database | Cloudflare D1 (SQLite) |
-| ORM | Kysely |
-| Cache | Cloudflare KV (72h TTL) |
+| Cache | Cloudflare KV (30-day TTL, stale-while-revalidate) |
 | Storage | Cloudflare R2 |
 | Browser | Cloudflare Browser Rendering |
 | Pipeline | Cloudflare Workflows (5-step) |
@@ -289,32 +293,16 @@ extractvibe/
 
 ## Contributing
 
-### Local development
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code style, and PR guidelines.
 
 ```bash
-git clone https://github.com/extractvibe/extractvibe.git
+git clone https://github.com/seangeng/extractvibe.git
 cd extractvibe
-npm install
+npm install --legacy-peer-deps
 cp .dev.vars.example .dev.vars
-# Fill in BETTER_AUTH_SECRET, BETTER_AUTH_URL, OPENROUTER_API_KEY
 npm run dev
 ```
 
-### Adding extractors
-
-Each extraction step lives in `server/lib/extractor/`. To add or modify an extraction stage:
-
-1. Create or edit the extractor in `server/lib/extractor/`
-2. If adding new fields, extend the schema in `server/schema/v1.ts`
-3. Wire the step into the workflow in `server/workflows/extract-brand.ts`
-4. Run `npm run typecheck` to verify
-
-### Pull requests
-
-- Keep PRs focused on a single change
-- Include a description of what changed and why
-- Run `npm run typecheck` before submitting
-
 ## License
 
-MIT
+[MIT](LICENSE)

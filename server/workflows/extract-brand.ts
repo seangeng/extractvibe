@@ -292,10 +292,14 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             }
           }
 
-          // Cache result (72 hours)
+          // Cache result (30 days) with metadata for stale-while-revalidate
           const resultJson = JSON.stringify(kit);
-          await this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: 60 * 60 * 72 });
-          await this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: 60 * 60 * 72 });
+          const cacheTtl = 60 * 60 * 24 * 30;
+          await Promise.all([
+            this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: cacheTtl }),
+            this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: cacheTtl }),
+            this.env.CACHE.put(`brand:${domain}:meta`, JSON.stringify({ extractedAt: Date.now(), jobId }), { expirationTtl: cacheTtl }),
+          ]);
 
           // Update D1 extraction record
           try {

@@ -343,7 +343,7 @@ export default function LandingPage() {
                     You&apos;ve used your 3 free extractions today
                   </p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    Create a free account for 50 extractions/month.
+                    Create a free account for 500 extractions/month.
                   </p>
                   <div className="flex gap-2">
                     <Button asChild size="sm">
@@ -496,11 +496,17 @@ export default function LandingPage() {
               </span>
             </div>
             <div className="hidden h-4 w-px bg-[hsl(var(--border))] sm:block" />
-            <div className="flex items-center gap-3">
+            <a
+              href="https://github.com/seangeng/extractvibe"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 transition-colors hover:text-[hsl(var(--foreground))]"
+            >
+              <Github className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
               <span className="font-mono text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 Open source
               </span>
-            </div>
+            </a>
           </div>
         </div>
       </section>
@@ -515,12 +521,23 @@ export default function LandingPage() {
                 your brand?
               </span>
             </h2>
-            <Button asChild size="lg" className="h-12 shrink-0 px-8">
-              <Link to="/sign-up">
-                Get started free
-                <ArrowUpRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex items-center gap-4">
+              <Button asChild size="lg" className="h-12 shrink-0 px-8">
+                <Link to="/sign-up">
+                  Get started free
+                  <ArrowUpRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+              <a
+                href="https://github.com/seangeng/extractvibe"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden items-center gap-2 rounded-lg border border-[hsl(var(--border))] px-4 py-2.5 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:border-[hsl(var(--foreground))]/20 hover:text-[hsl(var(--foreground))] sm:inline-flex"
+              >
+                <Github className="h-4 w-4" />
+                Star on GitHub
+              </a>
+            </div>
           </div>
         </div>
       </section>

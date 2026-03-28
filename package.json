@@ -3,6 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Open-source brand extraction engine. Pull logos, colors, typography, voice, and brand rules from any website.",
+  "license": "MIT",
+  "author": "Sean Geng",
+  "homepage": "https://extractvibe.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seangeng/extractvibe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seangeng/extractvibe/issues"
+  },
+  "keywords": [
+    "brand",
+    "extraction",
+    "colors",
+    "typography",
+    "design-tokens",
+    "brand-kit",
+    "ai",
+    "cloudflare-workers"
+  ],
   "scripts": {
     "dev": "react-router dev",
     "build": "react-router build",

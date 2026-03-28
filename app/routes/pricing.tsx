@@ -10,7 +10,7 @@ export function meta() {
     {
       name: "description",
       content:
-        "Extract brand kits for free. 50 extractions per month on the free plan. Starter and Pro plans for agencies and teams that need more.",
+        "Extract brand kits for free. 500 extractions per month on the free plan. Starter and Pro plans for agencies and teams that need more.",
     },
     {
       property: "og:title",
@@ -50,7 +50,7 @@ const plans: Plan[] = [
     ctaHref: "/sign-up",
     highlighted: false,
     features: [
-      { text: "50 extractions per month", included: true },
+      { text: "500 extractions per month", included: true },
       { text: "Full brand kit output", included: true },
       { text: "JSON export", included: true },
       { text: "API access (1 key)", included: true },
@@ -69,7 +69,7 @@ const plans: Plan[] = [
     ctaHref: "/sign-up",
     highlighted: true,
     features: [
-      { text: "500 extractions per month", included: true },
+      { text: "5,000 extractions per month", included: true },
       { text: "Full brand kit output", included: true },
       { text: "JSON + CSS + Tailwind export", included: true },
       { text: "API access (5 keys)", included: true },
@@ -117,7 +117,7 @@ export default function PricingPage() {
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
-            50 extractions per month on the free plan. No credit card required.
+            500 extractions per month on the free plan. No credit card required.
             Upgrade when you need more capacity or advanced features.
           </p>
         </div>
@@ -209,7 +209,7 @@ export default function PricingPage() {
               },
               {
                 q: "Can I self-host for free?",
-                a: "Yes. ExtractVibe is open source under the MIT license. Self-host on your own Cloudflare account with your own AI credits.",
+                a: "Yes. ExtractVibe is open source under the MIT license. Clone the repo from github.com/seangeng/extractvibe and self-host on your own Cloudflare account.",
               },
               {
                 q: "Do unused extractions roll over?",

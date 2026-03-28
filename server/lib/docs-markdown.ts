@@ -17,7 +17,7 @@ Get your first brand extraction in 30 seconds.
 
 ## 1. Get an API key
 
-Sign up at [extractvibe.com/sign-up](https://extractvibe.com/sign-up) and create an API key from your [dashboard](https://extractvibe.com/dashboard/keys). Free accounts include 50 extractions per month.
+Sign up at [extractvibe.com/sign-up](https://extractvibe.com/sign-up) and create an API key from your [dashboard](https://extractvibe.com/dashboard/keys). Free accounts include 500 extractions per month.
 
 Alternatively, if you are an AI agent, you can self-provision a key via the [Agent Bootstrap](https://extractvibe.com/docs/agent-bootstrap.md) endpoint -- no browser required.
 
@@ -206,7 +206,7 @@ curl -X POST https://extractvibe.com/api/agent/bootstrap \\
   -d '{"agent_name": "my-ai-agent"}'
 \`\`\`
 
-This creates a temporary account with 5 free credits and returns an API key. See the [Agent Bootstrap](https://extractvibe.com/docs/agent-bootstrap.md) reference for full details.
+This creates a temporary account with 25 free credits and returns an API key. See the [Agent Bootstrap](https://extractvibe.com/docs/agent-bootstrap.md) reference for full details.
 
 ## Anonymous access
 
@@ -950,7 +950,7 @@ print(f"{data['credits']} credits remaining ({data['plan']} plan)")
 
 \`\`\`json
 {
-  "credits": 47,
+  "credits": 497,
   "plan": "free"
 }
 \`\`\`
@@ -967,8 +967,8 @@ print(f"{data['credits']} credits remaining ({data['plan']} plan)")
 
 | Plan | Monthly credits | Reset |
 |---|---|---|
-| Free | 50 | 1st of each month |
-| Starter | 500 | 1st of each month |
+| Free | 500 | 1st of each month |
+| Starter | 5,000 | 1st of each month |
 | Pro | Unlimited | -- |
 
 ### Notes
@@ -1250,7 +1250,7 @@ Self-provisioning endpoint for AI agents and LLMs. Creates a temporary account w
 
 ## POST /api/agent/bootstrap
 
-Create a temporary agent account with 5 free credits and an API key.
+Create a temporary agent account with 25 free credits and an API key.
 
 ### Authentication
 
@@ -1287,7 +1287,7 @@ const res = await fetch("https://extractvibe.com/api/agent/bootstrap", {
 
 const data = await res.json();
 console.log(data.api_key);   // "ev_..."
-console.log(data.credits);   // 5
+console.log(data.credits);   // 25
 
 // Use the key for subsequent requests
 const brandRes = await fetch("https://extractvibe.com/api/extract", {
@@ -1315,7 +1315,7 @@ res = requests.post(
 
 data = res.json()
 print(data["api_key"])   # "ev_..."
-print(data["credits"])   # 5
+print(data["credits"])   # 25
 
 # Use the key for subsequent requests
 brand_res = requests.post(
@@ -1335,9 +1335,9 @@ brand_res = requests.post(
 \`\`\`json
 {
   "api_key": "ev_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4",
-  "credits": 5,
+  "credits": 25,
   "claim_url": "https://extractvibe.com/claim/abc123",
-  "claim_instructions": "Visit the claim URL to convert this agent account into a full account with 50 monthly credits.",
+  "claim_instructions": "Visit the claim URL to convert this agent account into a full account with 500 monthly credits.",
   "docs_url": "https://extractvibe.com/docs/quickstart.md",
   "expires_at": "2026-04-18T12:00:00Z"
 }
@@ -1372,10 +1372,10 @@ brand_res = requests.post(
 ### How it works
 
 1. The agent sends a unique name (e.g., \`"cursor-plugin"\` or \`"my-chatbot"\`).
-2. ExtractVibe creates a temporary user account with 5 credits.
+2. ExtractVibe creates a temporary user account with 25 credits.
 3. The response includes an API key and a claim URL.
 4. The agent can immediately use the API key for extractions.
-5. A human can visit the \`claim_url\` to upgrade the account to a full account with 50 monthly credits.
+5. A human can visit the \`claim_url\` to upgrade the account to a full account with 500 monthly credits.
 6. Unclaimed agent accounts expire after 30 days.
 
 ### Rate limits
@@ -1386,7 +1386,7 @@ Agent bootstrap is limited to 3 requests per day per IP address.
 
 - Agent names must be globally unique. Choose a descriptive, namespaced name (e.g., \`"mycompany-research-bot"\`).
 - The API key is returned only once. Store it securely.
-- Agent accounts start with 5 credits. Claim the account for 50 monthly credits.
+- Agent accounts start with 25 credits. Claim the account for 500 monthly credits.
 `;
 }
 
@@ -1537,7 +1537,7 @@ Some errors include additional fields:
 | \`409\` | Conflict | A duplicate operation was attempted (e.g., extraction already in progress for the same domain). |
 | \`426\` | Upgrade Required | WebSocket upgrade header expected but not present (WebSocket endpoint only). |
 | \`429\` | Too Many Requests | You have exceeded the rate limit for your tier. Check the \`X-RateLimit-Reset\` header for when you can retry. |
-| \`500\` | Internal Server Error | An unexpected error occurred. If this persists, please open an issue on [GitHub](https://github.com/extractvibe/extractvibe). |
+| \`500\` | Internal Server Error | An unexpected error occurred. If this persists, please open an issue on [GitHub](https://github.com/seangeng/extractvibe). |
 
 ## Common error scenarios
 
