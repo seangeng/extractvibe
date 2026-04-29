@@ -20,7 +20,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@fingerprintiq/pulse": "^0.1.1",
+    "@fingerprintiq/pulse": "^0.2.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.23.0 || ^4.0.0"
   },

@@ -32,6 +32,6 @@
     "dist/"
   ],
   "dependencies": {
-    "@fingerprintiq/pulse": "^0.1.1"
+    "@fingerprintiq/pulse": "^0.2.0"
   }
 }

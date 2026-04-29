@@ -52,7 +52,7 @@ app.use("/api/*", async (c, next) => {
     return next();
   }
 
-  return sentinel({ apiKey: c.env.FINGERPRINTIQ_SECRET_KEY })(c, next);
+  return sentinel({ apiKey: c.env.FINGERPRINTIQ_SECRET_KEY, mode: "background" })(c, next);
 });
 
 // ---------------------------------------------------------------------------
