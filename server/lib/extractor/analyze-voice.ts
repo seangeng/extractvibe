@@ -8,6 +8,7 @@
  */
 
 import { openRouterCompletion } from "../ai";
+import { log } from "../logger";
 import {
   extractJsonFromResponse,
   safeString,
@@ -43,6 +44,10 @@ export interface VoiceAnalysisInput {
 export interface VoiceAnalysisOutput {
   voice: BrandVoice;
   sampleCopy: string[];
+  /** True when the LLM call failed and we returned defaults. */
+  degraded?: boolean;
+  /** Reason for degradation (set when degraded is true). */
+  degradationReason?: string;
 }
 
 // ─── Deterministic Analysis Helpers ──────────────────────────────────
@@ -202,6 +207,8 @@ export async function analyzeVoice(
   let llmCopywritingStyle: Partial<CopywritingStyle> = {};
   let llmBulletPreference = false;
   let llmSampleCopy: string[] = [];
+  let degraded = false;
+  let degradationReason: string | undefined;
 
   try {
     const raw = await openRouterCompletion(
@@ -264,11 +271,19 @@ export async function analyzeVoice(
       (parsed as Record<string, unknown>).sampleCopy
     );
   } catch (err) {
-    // LLM failed — proceed with defaults + deterministic analysis only
-    console.warn(
-      "[analyze-voice] LLM analysis failed, using defaults:",
-      err instanceof Error ? err.message : err
-    );
+    // LLM failed — proceed with defaults + deterministic analysis only.
+    // Mark degraded so the workflow can surface this in the user-facing
+    // errorMessage instead of silently capping every score at ~65.
+    const reason = err instanceof Error ? err.message : String(err);
+    degraded = true;
+    degradationReason = reason;
+    log({
+      level: "warn",
+      event: "llm.fallback",
+      step: "analyze-voice",
+      error: reason,
+      meta: { brandName: input.brandName },
+    });
 
     llmToneSpectrum = {
       formalCasual: 5,
@@ -305,5 +320,6 @@ export async function analyzeVoice(
   return {
     voice,
     sampleCopy: llmSampleCopy,
+    ...(degraded && { degraded, degradationReason }),
   };
 }

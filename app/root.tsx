@@ -5,9 +5,48 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
 } from "react-router";
 import type { LinksFunction } from "react-router";
+import { useEffect } from "react";
 import "./styles/app.css";
+
+const FINGERPRINTIQ_PUBLIC_KEY =
+  "fiq_live_e6ec58cc2736f4694ce7e6f67b7391cc8e0ba1d0468b6cbe4c2c1f78502e608f";
+
+let fingerprintClient: {
+  identify: (options?: { tag?: unknown; timeout?: number }) => Promise<unknown>;
+} | null = null;
+
+async function identifyPage(path: string): Promise<void> {
+  const { default: FingerprintIQ } = await import("@fingerprintiq/js");
+  fingerprintClient ??= new FingerprintIQ({
+    apiKey: FINGERPRINTIQ_PUBLIC_KEY,
+    detectWallets: false,
+    timeout: 5_000,
+  });
+  await fingerprintClient.identify({
+    tag: {
+      app: "extractvibe",
+      surface: "web",
+      path,
+    },
+    timeout: 5_000,
+  });
+}
+
+function FingerprintIQTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = `${location.pathname}${location.search}`;
+    void identifyPage(path).catch(() => {
+      // Analytics must never affect the app shell.
+    });
+  }, [location.pathname, location.search]);
+
+  return null;
+}
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -68,6 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <div id="main-content">
+      <FingerprintIQTracker />
       <Outlet />
     </div>
   );

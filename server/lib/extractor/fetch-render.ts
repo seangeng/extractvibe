@@ -1239,44 +1239,6 @@ export async function fetchAndRender(
 ): Promise<FetchRenderOutput> {
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
-  // Defaults — returned on complete failure
-  const defaults: FetchRenderOutput = {
-    meta: {},
-    title: "",
-    brandName: null,
-    description: null,
-    headings: [],
-    heroText: [],
-    ctaTexts: [],
-    navLabels: [],
-    footerText: "",
-    bodyText: "",
-    elementStyles: [],
-    cssCustomProperties: {},
-    shadows: [],
-    gradients: [],
-    darkModeInfo: {
-      hasDarkClass: false,
-      currentTheme: null,
-      colorScheme: "",
-      hasThemeToggle: false,
-      darkStylesheetFound: false,
-      supportsDarkMode: false,
-    },
-    icons: [],
-    logoImages: [],
-    inlineSvgs: [],
-    ogImage: null,
-    backgroundImages: [],
-    stylesheetUrls: [],
-    manifestUrl: null,
-    manifestData: null,
-    designAssets: [],
-    iconLibrary: null,
-    screenshot: null,
-    html: "",
-  };
-
   try {
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
@@ -1284,12 +1246,14 @@ export async function fetchAndRender(
     // Desktop viewport
     await page.setViewport({ width: 1440, height: 900 });
 
-    // Navigate — networkidle2 allows 2 in-flight connections (analytics, etc.)
-    // and settles significantly faster than networkidle0 with minimal quality loss
+    // Navigate — domcontentloaded fires fast on SSR/RSC sites where networkidle*
+    // never settles (long-poll connections, analytics streams). Follow with a
+    // small settle delay so client-side hydration + late assets land before extraction.
     await page.goto(url, {
-      waitUntil: "networkidle2",
+      waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
 
     // ------------------------------------------------------------------
     // Extract DOM content (single evaluate for all DOM-based data)
@@ -1392,6 +1356,26 @@ export async function fetchAndRender(
     }
 
     // ------------------------------------------------------------------
+    // Sanity check — bail loud if extraction produced nothing usable.
+    // Without this, the workflow happily continues with empty inputs and
+    // marks the job complete with a garbage brand kit. Throwing here lets
+    // the workflow retry policy (limit: 2) actually kick in.
+    // ------------------------------------------------------------------
+
+    const isEmpty =
+      domResult.title === "" &&
+      domResult.html === "" &&
+      domResult.headings.length === 0 &&
+      domResult.bodyText === "" &&
+      stylesResult.elementStyles.length === 0;
+
+    if (isEmpty) {
+      throw new Error(
+        `fetchAndRender: extraction returned no content for ${url} — page.goto likely succeeded but DOM/styles evaluate produced empty results`
+      );
+    }
+
+    // ------------------------------------------------------------------
     // Assemble output
     // ------------------------------------------------------------------
 
@@ -1443,9 +1427,6 @@ export async function fetchAndRender(
       // Raw HTML
       html: domResult.html,
     };
-  } catch (err) {
-    console.error("fetchAndRender failed:", err);
-    return defaults;
   } finally {
     if (browser) {
       try {

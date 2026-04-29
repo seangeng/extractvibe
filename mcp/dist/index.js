@@ -1,9 +1,192 @@
 #!/usr/bin/env node
+var __require = /* @__PURE__ */ ((x2) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x2, {
+  get: (a, b2) => (typeof require !== "undefined" ? require : a)[b2]
+}) : x2)(function(x2) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x2 + '" is not supported');
+});
 
 // index.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+// node_modules/@fingerprintiq/pulse/dist/index.mjs
+import { createHash as m } from "crypto";
+import { hostname as O, cpus as _, totalmem as M, platform as v, arch as E, networkInterfaces as C, release as S, uptime as R } from "os";
+import { existsSync as b } from "fs";
+var T = ((n) => typeof __require < "u" ? __require : typeof Proxy < "u" ? new Proxy(n, { get: (e, t) => (typeof __require < "u" ? __require : e)[t] }) : n)(function(n) {
+  if (typeof __require < "u") return __require.apply(this, arguments);
+  throw Error('Dynamic require of "' + n + '" is not supported');
+});
+function h(n) {
+  return m("sha256").update(n).digest("hex");
+}
+function w() {
+  let n = C();
+  for (let e of Object.keys(n)) {
+    let t = n[e];
+    if (t) {
+      for (let r of t) if (!r.internal && r.mac && r.mac !== "00:00:00:00:00:00") return r.mac;
+    }
+  }
+  return null;
+}
+function N() {
+  return process.env.GITHUB_ACTIONS ? "github-actions" : process.env.GITLAB_CI ? "gitlab-ci" : process.env.CIRCLECI ? "circleci" : process.env.JENKINS_URL ? "jenkins" : process.env.TRAVIS ? "travis" : process.env.BUILDKITE ? "buildkite" : process.env.CODEBUILD_BUILD_ID ? "codebuild" : process.env.TF_BUILD ? "azure-devops" : process.env.CI ? "ci" : null;
+}
+function D() {
+  if (process.env.CODESPACES) return "codespaces";
+  if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
+  if (process.env.WSL_DISTRO_NAME) return "wsl";
+  if (process.env.DOCKER_CONTAINER) return "docker";
+  if (process.env.container) return "container";
+  try {
+    if (b("/.dockerenv")) return "docker";
+  } catch {
+  }
+  return null;
+}
+function A() {
+  let n = process.env.SHELL || process.env.ComSpec || null;
+  if (!n) return null;
+  let e = n.replace(/\\/g, "/").split("/");
+  return e[e.length - 1] ?? null;
+}
+function L() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale ?? null;
+  } catch {
+    return null;
+  }
+}
+function F() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    return null;
+  }
+}
+function f() {
+  let n = v(), e = S();
+  if (n === "darwin") {
+    let t = parseInt(e.split(".")[0] ?? "", 10);
+    if (!isNaN(t)) return `macOS ${t - 9}`;
+  }
+  if (n === "linux") {
+    try {
+      let r = T("fs").readFileSync("/etc/os-release", "utf-8").match(/PRETTY_NAME="([^"]+)"/);
+      if (r) return r[1];
+    } catch {
+    }
+    return `Linux ${e}`;
+  }
+  return n === "win32" ? `Windows ${e}` : e;
+}
+function d() {
+  return process.env.TERM_PROGRAM ?? process.env.TERMINAL_EMULATOR ?? null;
+}
+function k() {
+  if (process.env.npm_config_user_agent) {
+    let n = process.env.npm_config_user_agent;
+    if (n.startsWith("bun")) return "bun";
+    if (n.startsWith("pnpm")) return "pnpm";
+    if (n.startsWith("yarn")) return "yarn";
+    if (n.startsWith("npm")) return "npm";
+  }
+  return null;
+}
+function x() {
+  return process.env.NVM_DIR ? "nvm" : process.env.FNM_DIR || process.env.FNM_MULTISHELL_PATH ? "fnm" : process.env.VOLTA_HOME ? "volta" : process.env.ASDF_DIR ? "asdf" : null;
+}
+function s() {
+  let n = v(), e = E(), t = _(), r = t.length > 0 ? t[0]?.model ?? null : null, o = t.length > 0 ? t.length : null, a = M(), l = a > 0 ? Math.round(a / 1024 ** 3 * 10) / 10 : null, y = h(O()), c = w(), I = c ? h(c) : "no-mac", u = N(), p = D(), P = [y, I, r ?? "unknown-cpu", String(o ?? 0), String(l ?? 0), n, e, f() ?? "unknown-osver", d() ?? "unknown-term"].join("|");
+  return { fingerprintHash: m("sha256").update(P).digest("hex"), os: n, arch: e, cpuModel: r, coreCount: o, memoryGb: l, runtime: "node", runtimeVersion: process.version, shell: A(), isCi: u !== null, isContainer: p !== null, ciProvider: u, containerType: p, locale: L(), timezone: F(), osVersion: f(), terminalEmulator: d(), packageManager: k(), nodeVersionMajor: parseInt(process.versions.node.split(".")[0] ?? "", 10) || null, isTty: process.stdout.isTTY ?? false, terminalColumns: process.stdout.columns ?? null, wslDistro: process.env.WSL_DISTRO_NAME ?? null, nodeVersionManager: x(), systemUptime: Math.round(R()), processVersions: process.versions };
+}
+var i = class {
+  endpoint;
+  apiKey;
+  tool;
+  version;
+  maxBatchSize;
+  buffer = [];
+  machineId = null;
+  timer = null;
+  flushing = false;
+  constructor(e) {
+    this.endpoint = e.endpoint ?? "https://fingerprintiq.com", this.apiKey = e.apiKey, this.tool = e.tool, this.version = e.version, this.maxBatchSize = e.maxBatchSize ?? 25;
+    let t = e.flushInterval ?? 3e4;
+    this.timer = setInterval(() => {
+      this.flush();
+    }, t), this.timer.unref();
+  }
+  async identify(e) {
+    try {
+      let t = await fetch(`${this.endpoint}/v1/pulse/identify`, { method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": this.apiKey }, body: JSON.stringify(e) });
+      if (t.ok) {
+        let r = await t.json();
+        this.machineId = r.machineId ?? null;
+      }
+    } catch {
+    }
+  }
+  enqueue(e) {
+    this.buffer.push(e), this.buffer.length >= this.maxBatchSize && this.flush();
+  }
+  async flush() {
+    if (this.flushing || this.buffer.length === 0) return;
+    this.flushing = true;
+    let e = this.buffer.splice(0, this.maxBatchSize);
+    try {
+      let t = { machineId: this.machineId, tool: this.tool, toolVersion: this.version, events: e };
+      await fetch(`${this.endpoint}/v1/pulse/event`, { method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": this.apiKey }, body: JSON.stringify(t) });
+    } catch {
+    } finally {
+      this.flushing = false;
+    }
+  }
+  async shutdown() {
+    this.timer && (clearInterval(this.timer), this.timer = null), await this.flush();
+  }
+};
+function K(n) {
+  return n ? process.env.DO_NOT_TRACK === "1" || process.env.DO_NOT_TRACK === "true" || process.env.FINGERPRINTIQ_OPTOUT === "1" || process.env.FINGERPRINTIQ_OPTOUT === "true" : false;
+}
+var g = class {
+  config;
+  disabled;
+  transport = null;
+  initialized = false;
+  initPromise = null;
+  constructor(e) {
+    this.config = { respectOptOut: true, ...e }, this.disabled = K(this.config.respectOptOut ?? true);
+  }
+  async init() {
+    if (!(this.initialized || this.disabled)) {
+      if (this.initPromise) {
+        await this.initPromise;
+        return;
+      }
+      this.initPromise = (async () => {
+        this.transport = new i(this.config);
+        let e = s();
+        await this.transport.identify(e), this.initialized = true;
+      })(), await this.initPromise;
+    }
+  }
+  async track(e, t) {
+    if (this.disabled || (await this.init(), !this.transport)) return;
+    let r = { command: e, timestamp: Date.now(), ...t?.durationMs !== void 0 && typeof t.durationMs == "number" ? { durationMs: t.durationMs } : {}, ...t?.success !== void 0 && typeof t.success == "boolean" ? { success: t.success } : {}, metadata: t };
+    this.transport.enqueue(r);
+  }
+  async shutdown() {
+    this.disabled || this.transport && await this.transport.shutdown();
+  }
+};
+
+// index.ts
 import { z } from "zod";
+var VERSION = "0.1.0";
+var FINGERPRINTIQ_PULSE_KEY = "fiq_live_382ec7bb450690e211a5db476151e7b67c7ab8424be6660bbf2fe0900d5a67ad";
 var API_KEY = process.env.EXTRACTVIBE_API_KEY;
 var BASE_URL = (process.env.EXTRACTVIBE_BASE_URL ?? "https://extractvibe.com").replace(
   /\/$/,
@@ -11,15 +194,37 @@ var BASE_URL = (process.env.EXTRACTVIBE_BASE_URL ?? "https://extractvibe.com").r
 );
 var POLL_INTERVAL_MS = 3e3;
 var POLL_MAX_ATTEMPTS = 120;
+var pulse = new g({
+  apiKey: FINGERPRINTIQ_PULSE_KEY,
+  tool: "extractvibe-mcp",
+  version: VERSION,
+  flushInterval: 1e3,
+  maxBatchSize: 1
+});
+function trackMcpEvent(command, metadata) {
+  void pulse.track(command, metadata).catch(() => {
+  });
+}
+async function shutdownPulse() {
+  try {
+    await pulse.shutdown();
+  } catch {
+  }
+}
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    void shutdownPulse().finally(() => process.exit(0));
+  });
+}
 function headers() {
-  const h = {
+  const h2 = {
     "Content-Type": "application/json",
     "User-Agent": "extractvibe-mcp/0.1.0"
   };
   if (API_KEY) {
-    h["Authorization"] = `Bearer ${API_KEY}`;
+    h2["Authorization"] = `Bearer ${API_KEY}`;
   }
-  return h;
+  return h2;
 }
 async function apiGet(path) {
   const url = `${BASE_URL}${path}`;
@@ -63,18 +268,18 @@ async function apiPost(path, body) {
     return { error: `Network error: ${err.message}`, status: 0 };
   }
 }
-function isApiError(v) {
-  return typeof v === "object" && v !== null && "error" in v && "status" in v;
+function isApiError(v2) {
+  return typeof v2 === "object" && v2 !== null && "error" in v2 && "status" in v2;
 }
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function capitalize(s2) {
+  return s2.charAt(0).toUpperCase() + s2.slice(1);
 }
-function hasValue(v) {
-  if (v == null) return false;
-  if (typeof v === "string" && v.trim() === "") return false;
+function hasValue(v2) {
+  if (v2 == null) return false;
+  if (typeof v2 === "string" && v2.trim() === "") return false;
   return true;
 }
 function hasItems(arr) {
@@ -82,7 +287,7 @@ function hasItems(arr) {
 }
 function hasAnyValue(obj) {
   if (!obj) return false;
-  return Object.values(obj).some((v) => hasValue(v));
+  return Object.values(obj).some((v2) => hasValue(v2));
 }
 function fontStack(font) {
   const parts = [];
@@ -91,7 +296,7 @@ function fontStack(font) {
   return parts.join(", ") || "sans-serif";
 }
 function findFont(kit, role) {
-  return kit.typography?.families?.find((f) => f.role === role);
+  return kit.typography?.families?.find((f2) => f2.role === role);
 }
 function formatColors(domain, colors) {
   const lines = [];
@@ -708,7 +913,7 @@ The extraction may still complete \u2014 try checking with get_brand_colors for 
 }
 var server = new McpServer({
   name: "extractvibe",
-  version: "0.1.0"
+  version: VERSION
 });
 server.tool(
   "extract_brand",
@@ -717,6 +922,7 @@ server.tool(
     url: z.string().describe("The website URL to extract a brand kit from (e.g., https://stripe.com)")
   },
   async ({ url }) => {
+    trackMcpEvent("extract_brand", { hasUrl: Boolean(url) });
     const result = await handleExtractBrand(url);
     return {
       content: [{ type: "text", text: result }]
@@ -730,6 +936,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)")
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_colors", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -751,6 +958,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)")
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_typography", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -772,6 +980,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)")
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_voice", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -793,6 +1002,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)")
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_rules", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -814,6 +1024,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)")
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_vibe", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -836,6 +1047,7 @@ server.tool(
     format: z.enum(["css", "tailwind", "markdown", "tokens"]).describe("Export format: css, tailwind, markdown, or tokens")
   },
   async ({ domain, format }) => {
+    trackMcpEvent("export_brand", { hasDomain: Boolean(domain), format });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -876,8 +1088,9 @@ ${output}\`\`\``
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  trackMcpEvent("server_start");
 }
 main().catch((err) => {
   console.error("Fatal error starting ExtractVibe MCP server:", err);
-  process.exit(1);
+  void shutdownPulse().finally(() => process.exit(1));
 });

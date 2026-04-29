@@ -298,6 +298,37 @@ export function colorDistance(c1: RGB, c2: RGB): number {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+/**
+ * Returns true if a color looks like a brand-y candidate: not pure white,
+ * not pure black, not transparent, and either reasonably saturated or a
+ * deep grayscale (true brands sometimes use pure black/charcoal).
+ *
+ * Used to filter out white "Sign in" outline buttons and other noise from
+ * the primary/accent candidate pool, where the role picker will otherwise
+ * pick whatever lands first by confidence tie.
+ */
+export function looksLikeBrandColor(rgb: RGB): boolean {
+  const { r, g, b } = rgb;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const saturation = max === 0 ? 0 : (max - min) / max;
+
+  // Reject near-white (luminance > 0.95 with low saturation)
+  if (luminance > 0.95 && saturation < 0.15) return false;
+  // Reject near-transparent stand-ins by way of pure white (handled above)
+  // Reject very light grays (background-like, not brand-like)
+  if (luminance > 0.88 && saturation < 0.1) return false;
+  return true;
+}
+
+/** Saturation 0–1 for sorting candidate brand colors. */
+export function colorSaturation(rgb: RGB): number {
+  const max = Math.max(rgb.r, rgb.g, rgb.b);
+  const min = Math.min(rgb.r, rgb.g, rgb.b);
+  return max === 0 ? 0 : (max - min) / max;
+}
+
 export function parseColor(
   cssColor: string
 ): { hex: string; rgb: RGB } | null {
@@ -856,27 +887,35 @@ function mapCssVarToRole(
     return { role: "error", semantic: "error" };
   if (lower.includes("info")) return { role: "info", semantic: "info" };
 
-  // Role colors
+  // Background-y vars take precedence over the "primary" keyword check below.
+  // CSS var names like `--palette-bg-primary`, `--color-background-primary`,
+  // `--surface-primary` mean "the primary BACKGROUND" — not the brand primary.
+  // Without this, sites like airbnb and nytimes end up with primary=#ffffff.
+  const isBackgroundQualified =
+    lower.includes("background") ||
+    lower.includes("-bg-") ||
+    lower.includes("-bg") ||
+    lower === "--bg" ||
+    lower.includes("surface");
+  const isForegroundQualified =
+    lower.includes("foreground") ||
+    lower.includes("-text") ||
+    lower === "--text";
+
+  if (isBackgroundQualified) {
+    if (lower.includes("surface")) return { role: "surface" };
+    return { role: "background" };
+  }
+  if (isForegroundQualified) return { role: "text" };
+
+  // Now check role keywords (knowing it's not a bg/fg var)
   if (lower.includes("primary") || lower.includes("brand"))
     return { role: "primary" };
   if (lower.includes("accent")) return { role: "accent" };
   if (lower.includes("secondary")) return { role: "secondary" };
-  if (
-    lower.includes("background") ||
-    lower.includes("-bg") ||
-    lower === "--bg"
-  )
-    return { role: "background" };
-  if (
-    lower.includes("foreground") ||
-    lower.includes("-text") ||
-    lower === "--text"
-  )
-    return { role: "text" };
   if (lower.includes("border")) return { role: "border" };
   if (lower.includes("link")) return { role: "link" };
   if (lower.includes("muted")) return { role: "muted" };
-  if (lower.includes("surface")) return { role: "surface" };
 
   return null;
 }
@@ -960,12 +999,20 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     const isDark =
       isDarkModeContext(prop.context, darkModeInfo) || isDarkVariantName(prop.name);
 
+    // Penalize deeply-nested component vars. `--brand-primary` is a real
+    // global token; `--brand-VideoPlayer-closedCaption-text-bgColor` is a
+    // component-specific subtoken that shouldn't claim a top-level role.
+    // Each hyphen beyond 2 reduces confidence by 0.1, floor at 0.4.
+    const hyphenCount = (prop.name.match(/-/g) || []).length;
+    const depthPenalty = Math.max(0, hyphenCount - 2) * 0.1;
+    const cssVarConfidence = Math.max(0.4, 0.9 - depthPenalty);
+
     collectedColors.push({
       hex: parsed.hex,
       rgb: parsed.rgb,
       role: roleInfo?.role,
       source: `css-var: ${prop.name}`,
-      confidence: 0.9,
+      confidence: cssVarConfidence,
       mode: isDark ? "dark" : "light",
     });
 
@@ -975,7 +1022,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
         rgb: parsed.rgb,
         role: roleInfo.semantic,
         source: `css-var: ${prop.name}`,
-        confidence: 0.9,
+        confidence: cssVarConfidence,
         mode: isDark ? "dark" : "light",
       });
     }
@@ -1020,19 +1067,36 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
   for (const entry of fetchOutput.computedStyles) {
     const selector = entry.selector.toLowerCase().replace(/[.#\[\]>+~: ]/g, "");
 
-    // Handle sampled buttons/links — map to "primary" role
+    // Handle sampled buttons/links — map to "primary" role.
+    // Filter out non-brand-y backgrounds (white/black/grayscale) so an
+    // outlined "Sign in" button doesn't beat the actual brand-color CTA.
+    // Confidence is scaled by saturation so the most-saturated brand button
+    // wins on ties.
     if (selector.startsWith("button-sample")) {
       for (const prop of ["background-color", "backgroundColor"]) {
         const value = entry.styles[prop];
         if (!value) continue;
         const parsed = parseColor(value);
         if (!parsed) continue;
+        if (!looksLikeBrandColor(parsed.rgb)) {
+          // Still record it in the rawPalette for debugging, but don't
+          // pollute the primary candidate pool.
+          rawPaletteMap.set(parsed.hex, {
+            hex: parsed.hex,
+            rgb: parsed.rgb,
+            source: `computed: ${entry.selector}`,
+          });
+          continue;
+        }
+        // 0.8 base + up to +0.15 boost for saturated brand colors
+        const sat = colorSaturation(parsed.rgb);
+        const confidence = 0.8 + Math.min(sat, 1) * 0.15;
         collectedColors.push({
           hex: parsed.hex,
           rgb: parsed.rgb,
           role: "primary",
           source: `computed: ${entry.selector} ${prop}`,
-          confidence: 0.8,
+          confidence,
           mode: "light",
         });
         rawPaletteMap.set(parsed.hex, {
@@ -1044,20 +1108,43 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       continue;
     }
 
-    // Handle sampled sections — map bg to "surface"
+    // Handle sampled sections — map bg to "surface".
+    // Mode is determined by the section's own luminance: light sections become
+    // light-mode surface, dark sections become dark-mode surface. Without this,
+    // a site with a dark hero section (e.g. Linear) ends up with surface=indigo
+    // in lightMode, which is incoherent.
     if (selector.startsWith("section-sample")) {
       for (const prop of ["background-color", "backgroundColor"]) {
         const value = entry.styles[prop];
         if (!value) continue;
         const parsed = parseColor(value);
         if (!parsed) continue;
+        const lum = (0.299 * parsed.rgb.r + 0.587 * parsed.rgb.g + 0.114 * parsed.rgb.b) / 255;
+        const sat = colorSaturation(parsed.rgb);
+        // A canonical light-mode "surface" is near-white and low-saturation.
+        // A colored hero section (e.g. Linear's indigo backdrop, Stripe Press
+        // lime) is a dark/colored surface — route to dark mode rather than
+        // polluting light-mode surface with brand-color sections.
+        let mode: "light" | "dark";
+        if (lum > 0.85 && sat < 0.2) mode = "light";
+        else if (lum < 0.5 || sat > 0.3) mode = "dark";
+        else {
+          // Mid-tone, low-saturation grays are ambiguous — record but don't
+          // claim either mode confidently.
+          rawPaletteMap.set(parsed.hex, {
+            hex: parsed.hex,
+            rgb: parsed.rgb,
+            source: `computed: ${entry.selector}`,
+          });
+          continue;
+        }
         collectedColors.push({
           hex: parsed.hex,
           rgb: parsed.rgb,
           role: "surface",
           source: `computed: ${entry.selector} ${prop}`,
           confidence: 0.7,
-          mode: "light",
+          mode,
         });
         rawPaletteMap.set(parsed.hex, {
           hex: parsed.hex,
@@ -1068,15 +1155,20 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       continue;
     }
 
-    // Handle text samples — detect secondary/muted text colors
+    // Handle text samples — detect secondary/muted text colors.
+    // Route by luminance into the correct mode. Pure white/black is
+    // skipped entirely (transparent or inverted hero text — too noisy).
     if (selector.startsWith("text-sample")) {
       const value = entry.styles["color"];
       if (!value) continue;
       const parsed = parseColor(value);
       if (!parsed) continue;
+      const lum = (0.299 * parsed.rgb.r + 0.587 * parsed.rgb.g + 0.114 * parsed.rgb.b) / 255;
+      if (lum > 0.95 || lum < 0.05) continue;
+      const sampleMode: "light" | "dark" = lum > 0.6 ? "dark" : "light";
 
-      // Check if this is different enough from primary text to be "secondary"
-      const primaryText = collectedColors.find(c => c.role === "text" && c.mode === "light");
+      // Check if this is different enough from primary text in matching mode
+      const primaryText = collectedColors.find(c => c.role === "text" && c.mode === sampleMode);
       if (primaryText) {
         const dist = colorDistance(parsed.rgb, primaryText.rgb);
         if (dist > 30) {
@@ -1087,7 +1179,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
             role: "muted",
             source: `computed: ${entry.selector} color`,
             confidence: 0.6,
-            mode: "light",
+            mode: sampleMode,
           });
           collectedColors.push({
             hex: parsed.hex,
@@ -1095,7 +1187,7 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
             role: "secondaryText",
             source: `computed: ${entry.selector} color`,
             confidence: 0.6,
-            mode: "light",
+            mode: sampleMode,
           });
         }
       }
@@ -1113,13 +1205,40 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
       const parsed = parseColor(value);
       if (!parsed) continue;
 
+      // Mode-aware tagging for element-style colors.
+      // body/h1/etc text colors that are light → dark-mode rendering
+      // background/surface bg colors that are dark → dark-mode rendering
+      // link colors that are pure white/black → skip (snapshot artifact)
+      const lum = (0.299 * parsed.rgb.r + 0.587 * parsed.rgb.g + 0.114 * parsed.rgb.b) / 255;
+      let mode: "light" | "dark" = "light";
+
+      if (mapping.role === "text" || mapping.role === "secondaryText") {
+        // Light text means dark-mode rendering
+        mode = lum > 0.6 ? "dark" : "light";
+      } else if (mapping.role === "background" || mapping.role === "surface") {
+        // Dark bg means dark-mode rendering
+        mode = lum < 0.4 ? "dark" : "light";
+      } else if (mapping.role === "link") {
+        // Pure white/black links are noise — skip entirely
+        if (lum > 0.95 || lum < 0.05) {
+          rawPaletteMap.set(parsed.hex, {
+            hex: parsed.hex,
+            rgb: parsed.rgb,
+            source: `computed: ${entry.selector}`,
+          });
+          continue;
+        }
+        // Otherwise infer mode from luminance (light link on dark bg = dark mode)
+        mode = lum > 0.7 ? "dark" : "light";
+      }
+
       collectedColors.push({
         hex: parsed.hex,
         rgb: parsed.rgb,
         role: mapping.role,
         source: `computed: ${entry.selector} ${mapping.property}`,
         confidence: 0.75,
-        mode: "light",
+        mode,
       });
 
       rawPaletteMap.set(parsed.hex, {
@@ -1144,16 +1263,25 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
     rawPaletteMap.set("#ffffff", { hex: "#ffffff", rgb: { r: 255, g: 255, b: 255 }, source: "inferred" });
   }
 
-  // --- Meta theme-color ---
+  // --- Meta theme-color & manifest theme_color ---
+  // These are *chrome hints* (mobile address bar tint, app icon backdrop), not
+  // brand identity in the strict sense. Linear sets theme-color: #08090a so
+  // the iOS notch is dark — but their CTA color is different. We collect them
+  // as primary candidates but at lower confidence than a saturated button-bg
+  // sample, so the actual brand button wins when available.
   if (fetchOutput.metaThemeColor) {
     const parsed = parseColor(fetchOutput.metaThemeColor);
     if (parsed) {
+      const sat = colorSaturation(parsed.rgb);
+      // Saturated theme-colors (real brand purples/blues/greens) are usually
+      // accurate; near-monochrome ones (black/white/gray) are chrome hints.
+      const confidence = sat > 0.4 ? 0.85 : 0.55;
       collectedColors.push({
         hex: parsed.hex,
         rgb: parsed.rgb,
         role: "primary",
         source: "meta: theme-color",
-        confidence: 0.85,
+        confidence,
         mode: "light",
       });
       rawPaletteMap.set(parsed.hex, {
@@ -1168,12 +1296,14 @@ function parseColors(fetchOutput: FetchRenderOutput): BrandColors {
   if (fetchOutput.manifestThemeColor) {
     const parsed = parseColor(fetchOutput.manifestThemeColor);
     if (parsed) {
+      const sat = colorSaturation(parsed.rgb);
+      const confidence = sat > 0.4 ? 0.85 : 0.55;
       collectedColors.push({
         hex: parsed.hex,
         rgb: parsed.rgb,
         role: "primary",
         source: "manifest: theme_color",
-        confidence: 0.85,
+        confidence,
         mode: "light",
       });
       rawPaletteMap.set(parsed.hex, {

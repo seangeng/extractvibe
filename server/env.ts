@@ -19,6 +19,7 @@ export interface Env {
   GITHUB_CLIENT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  FINGERPRINTIQ_SECRET_KEY?: string;
 
   // Optional integrations
   SERPER_API_KEY?: string;

@@ -7,6 +7,7 @@
  */
 
 import { openRouterCompletion } from "../ai";
+import { log } from "../logger";
 import {
   extractJsonFromResponse,
   safeString,
@@ -48,6 +49,10 @@ export interface VibeSynthesisOutput {
   vibe: BrandVibe;
   rules: BrandRules;
   archetypes: Array<{ name: string; confidence: number }>;
+  /** True when the LLM call failed and we returned defaults. */
+  degraded?: boolean;
+  /** Reason for degradation (set when degraded is true). */
+  degradationReason?: string;
 }
 
 // ─── Prompt Helpers ──────────────────────────────────────────────────
@@ -317,7 +322,10 @@ Return ONLY the JSON object.`;
 
 // ─── Fallback Defaults ───────────────────────────────────────────────
 
-function buildFallbackOutput(input: VibeSynthesisInput): VibeSynthesisOutput {
+function buildFallbackOutput(
+  input: VibeSynthesisInput,
+  degradationReason: string
+): VibeSynthesisOutput {
   const brandName = input.identity.brandName || input.domain;
   return {
     vibe: {
@@ -336,6 +344,8 @@ function buildFallbackOutput(input: VibeSynthesisInput): VibeSynthesisOutput {
       source: "inferred",
     },
     archetypes: [],
+    degraded: true,
+    degradationReason,
   };
 }
 
@@ -359,22 +369,32 @@ export async function synthesizeVibe(
       }
     );
   } catch (err) {
-    console.warn(
-      "[synthesize-vibe] LLM call failed, returning fallback:",
-      err instanceof Error ? err.message : err
-    );
-    return buildFallbackOutput(input);
+    const reason = err instanceof Error ? err.message : String(err);
+    log({
+      level: "warn",
+      event: "llm.fallback",
+      step: "synthesize-vibe",
+      domain: input.domain,
+      error: reason,
+      meta: { stage: "openrouter-call" },
+    });
+    return buildFallbackOutput(input, `synthesize-vibe LLM call failed: ${reason}`);
   }
 
   let parsed: Record<string, unknown>;
   try {
     parsed = extractJsonFromResponse(raw) as Record<string, unknown>;
   } catch (err) {
-    console.warn(
-      "[synthesize-vibe] JSON parse failed, returning fallback:",
-      err instanceof Error ? err.message : err
-    );
-    return buildFallbackOutput(input);
+    const reason = err instanceof Error ? err.message : String(err);
+    log({
+      level: "warn",
+      event: "llm.fallback",
+      step: "synthesize-vibe",
+      domain: input.domain,
+      error: reason,
+      meta: { stage: "json-parse" },
+    });
+    return buildFallbackOutput(input, `synthesize-vibe JSON parse failed: ${reason}`);
   }
 
   // ── Parse vibe ──

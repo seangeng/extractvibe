@@ -2,7 +2,7 @@
 
 > Open-source brand intelligence API that extracts comprehensive brand kits from any website.
 
-ExtractVibe is a REST API that extracts colors, typography, voice, logos, design tokens, and brand personality from any URL. It uses a dual-AI pipeline (Cloudflare Workers AI + OpenRouter) to analyze websites and produce structured brand kits in JSON, CSS, Tailwind, Markdown, and W3C Design Token formats. Free tier includes 50 extractions per month.
+ExtractVibe is a REST API that extracts colors, typography, voice, logos, design tokens, and brand personality from any URL. It uses a dual-AI pipeline (Cloudflare Workers AI + OpenRouter) to analyze websites and produce structured brand kits in JSON, CSS, Tailwind, Markdown, W3C Design Token, and DESIGN.md formats. Every extraction also generates a Google-spec DESIGN.md file at /api/brand/:domain/design.md ready to drop into any AI-coding project. Free tier includes 50 extractions per month.
 
 ## Getting Started
 - [Quickstart](https://extractvibe.com/docs/quickstart.md): Get your first brand extraction in 30 seconds
@@ -10,8 +10,9 @@ ExtractVibe is a REST API that extracts colors, typography, voice, logos, design
 
 ## API Reference
 - [Extract Brand](https://extractvibe.com/docs/extract.md): Start extractions, poll status, get results
-- [Export Formats](https://extractvibe.com/docs/export.md): JSON, CSS Variables, Tailwind, Markdown, Design Tokens
-- [Brand Lookup](https://extractvibe.com/docs/brand.md): Cached brand kit lookup by domain
+- [Export Formats](https://extractvibe.com/docs/export.md): JSON, CSS Variables, Tailwind, Markdown, Design Tokens, DESIGN.md
+- [DESIGN.md Generation](https://extractvibe.com/docs/design-md.md): Generate Google-spec DESIGN.md files for any site
+- [Brand Lookup](https://extractvibe.com/docs/brand.md): Cached brand kit lookup by domain (also at /api/brand/:domain/design.md)
 - [Credits](https://extractvibe.com/docs/credits.md): Check credit balance and plan
 - [API Keys](https://extractvibe.com/docs/keys.md): Create, list, and revoke API keys
 - [Agent Bootstrap](https://extractvibe.com/docs/agent-bootstrap.md): LLM/AI agent self-provisioning

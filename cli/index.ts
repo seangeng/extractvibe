@@ -14,10 +14,14 @@
  * Zero runtime dependencies — uses only Node.js built-in fetch (Node 18+).
  */
 
+import { Pulse } from "@fingerprintiq/pulse";
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const VERSION = "0.1.0";
 const API_BASE = "https://extractvibe.com/api";
+const FINGERPRINTIQ_PULSE_KEY =
+  "fiq_live_382ec7bb450690e211a5db476151e7b67c7ab8424be6660bbf2fe0900d5a67ad";
 const VALID_FORMATS = ["json", "css", "tailwind", "markdown", "tokens"] as const;
 type ExportFormat = (typeof VALID_FORMATS)[number];
 
@@ -559,9 +563,11 @@ async function pollJobToCompletion(
             completedSteps.add(step);
 
             // Start next step
-            const nextIdx = PIPELINE_STEPS.indexOf(step) + 1;
-            if (nextIdx < PIPELINE_STEPS.length) {
-              const nextStep = PIPELINE_STEPS[nextIdx];
+            const nextIdx: number = PIPELINE_STEPS.indexOf(step) + 1;
+            const nextStep = PIPELINE_STEPS[nextIdx] as
+              | (typeof PIPELINE_STEPS)[number]
+              | undefined;
+            if (nextStep) {
               const nextLabel = STEP_LABELS[nextStep] || nextStep;
               currentSpinner = new Spinner(nextLabel);
               currentStep = nextStep;
@@ -684,27 +690,63 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ─── FingerprintIQ Pulse ────────────────────────────────────────────────────
+
+function getPulseCommand(args: ParsedArgs): string {
+  if (args.help || !args.url) return "help";
+  if (args.version) return "version";
+  return "extract";
+}
+
+async function trackCliInvocation(args: ParsedArgs): Promise<void> {
+  try {
+    const pulse = new Pulse({
+      apiKey: FINGERPRINTIQ_PULSE_KEY,
+      tool: "extractvibe-cli",
+      version: VERSION,
+      flushInterval: 1_000,
+      maxBatchSize: 1,
+    });
+
+    await pulse.track(getPulseCommand(args), {
+      format: args.format,
+      hasOutput: Boolean(args.output),
+      hasInlineApiKey: Boolean(args.apiKey),
+      hasEnvApiKey: Boolean(process.env.EXTRACTVIBE_API_KEY),
+      hasUrl: Boolean(args.url),
+    });
+    await pulse.shutdown();
+  } catch {
+    // Usage analytics must never affect CLI behavior.
+  }
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const invocationTracked = trackCliInvocation(args);
 
   // --help
   if (args.help) {
     printHelp();
-    process.exit(0);
+    await invocationTracked;
+    return;
   }
 
   // --version
   if (args.version) {
     printVersion();
-    process.exit(0);
+    await invocationTracked;
+    return;
   }
 
   // Require URL
   if (!args.url) {
     printHelp();
-    process.exit(1);
+    await invocationTracked;
+    process.exitCode = 1;
+    return;
   }
 
   // Resolve API key

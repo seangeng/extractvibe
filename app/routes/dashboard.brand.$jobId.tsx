@@ -16,6 +16,9 @@ import {
   ChevronDown,
   AlertCircle,
   Info,
+  FileText,
+  Copy,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -425,6 +428,115 @@ function downloadJson(data: ExtractVibeBrandKit) {
   URL.revokeObjectURL(url);
 }
 
+// ─── DESIGN.md Panel (dashboard) ────────────────────────────────────────
+
+function DashboardDesignMdPanel({ jobId, domain }: { jobId: string; domain: string }) {
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/extract/${jobId}/export/design-md`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
+      .then((t) => { if (!cancelled) setContent(t); })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  const handleCopy = () => {
+    if (!content) return;
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const lineCount = content ? content.split("\n").length : 0;
+  const byteCount = content ? new TextEncoder().encode(content).length : 0;
+
+  return (
+    <section className="space-y-5">
+      <SectionLabel number="00" label="DESIGN.md" title="AI-Ready Design Spec" />
+      <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+        <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+                <span className="font-mono text-sm font-medium">DESIGN.md</span>
+                <Badge variant="outline" className="text-[10px] tracking-wider uppercase gap-1">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  AI-ready
+                </Badge>
+              </div>
+              <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+                Drop into your project root. Cursor, Claude Code, v0, and Lovable will pick it up automatically.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleCopy} disabled={!content} className="gap-1.5">
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href={`/api/extract/${jobId}/export/design-md`} download="DESIGN.md">
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href={`/api/brand/${domain}/design.md`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Public URL
+                </a>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {loading && (
+          <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            <Loader2 className="mx-auto h-5 w-5 animate-spin mb-2" />
+            Generating DESIGN.md…
+          </div>
+        )}
+        {error && !loading && (
+          <div className="px-5 py-10 text-center text-sm text-[hsl(var(--destructive))]">
+            Could not load DESIGN.md: {error}
+          </div>
+        )}
+        {content && (
+          <>
+            <pre className="max-h-[420px] overflow-auto p-5 text-xs leading-relaxed font-mono">
+              <code>{content}</code>
+            </pre>
+            <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-5 py-2.5 text-xs text-[hsl(var(--muted-foreground))] tabular-nums flex items-center justify-between">
+              <span>{lineCount} lines · {byteCount.toLocaleString()} bytes</span>
+              <a
+                href="https://github.com/google-labs-code/design.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-[hsl(var(--foreground))]"
+              >
+                Spec
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Page Component ────────────────────────────────────────────────
 
 export default function BrandKitPage() {
@@ -593,6 +705,7 @@ export default function BrandKitPage() {
                 />
                 <div className="absolute right-0 z-50 mt-1 w-64 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-1">
                   {[
+                    { format: "design-md", icon: "\u{2728}", label: "DESIGN.md", desc: "AI-coding agent design spec (Google)" },
                     { format: "json", icon: "\u{1F4E6}", label: "JSON", desc: "Full brand kit data" },
                     { format: "css", icon: "\u{1F3A8}", label: "CSS", desc: "Custom properties for :root" },
                     { format: "tailwind", icon: "\u{1F30A}", label: "Tailwind", desc: "@theme block for Tailwind v4" },
@@ -635,6 +748,9 @@ export default function BrandKitPage() {
           </Button>
         </div>
       </div>
+
+      {/* ─── 00. DESIGN.md ────────────────────────────────────────────────── */}
+      {jobId && domain && <DashboardDesignMdPanel jobId={jobId} domain={domain} />}
 
       {/* ─── 01. Vibe Summary ─────────────────────────────────────────────── */}
       {vibe && (vibe.summary || (vibe.tags && vibe.tags.length > 0)) && (

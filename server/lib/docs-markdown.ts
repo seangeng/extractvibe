@@ -2094,6 +2094,146 @@ Each axis is a 1--10 scale. Lower values lean toward the left label; higher valu
 `;
 }
 
+// ─── DESIGN.md generation docs ──────────────────────────────────────────
+
+export function getDesignMdDocsMd(): string {
+  return `# DESIGN.md Generation
+
+ExtractVibe generates a [DESIGN.md](https://github.com/google-labs-code/design.md) file alongside every brand kit. \`DESIGN.md\` is to design what \`AGENTS.md\` is to dev workflow — a single Markdown file at the project root that AI coding agents (Claude Code, Cursor, v0, Lovable, Bolt, Windsurf, Stitch) read to understand the brand and generate on-brand UI.
+
+## Endpoints
+
+\`\`\`
+GET /api/extract/:jobId/export/design-md   # download DESIGN.md for a job
+GET /api/brand/:domain/design.md           # public per-domain DESIGN.md (cached, no auth)
+GET /api/brand/:domain/design.md/lint      # lint findings JSON
+\`\`\`
+
+## Quickstart
+
+\`\`\`bash
+# 1. Trigger an extraction
+curl -X POST https://extractvibe.com/api/extract \\
+  -H "x-api-key: ev_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"url":"https://stripe.com"}'
+# → {"jobId":"...","domain":"stripe.com"}
+
+# 2. Wait for completion (poll the job)
+# 3. Download the DESIGN.md
+curl https://extractvibe.com/api/brand/stripe.com/design.md > DESIGN.md
+\`\`\`
+
+Drop the file at your project root, sibling to \`README.md\`. Every supported AI coding agent will pick it up automatically.
+
+## Format
+
+The file ships **both dialects** in one document:
+
+1. **YAML frontmatter** — Google-canonical machine-readable design tokens. Exportable to W3C Design Tokens (DTCG) or Tailwind theme via \`npx @google/design.md export --format dtcg|tailwind\`.
+2. **Markdown body** — community-style prose sections. Section order matches the canonical spec; ExtractVibe-specific sections (Voice, Logos, Sources) appended as preserved unknown sections.
+
+### Frontmatter schema
+
+\`\`\`yaml
+---
+version: alpha
+name: <brand name>
+description: <one-line summary>
+colors:
+  primary: "#..."           # required
+  secondary: "#..."
+  tertiary: "#..."
+  surface: "#..."
+  on-surface: "#..."
+  primary-dark: "#..."      # dark-mode variants suffixed with -dark
+  surface-dark: "#..."
+  error: "#..."
+  warning: "#..."
+typography:
+  display-lg:               # Material 3 token names
+    fontFamily: "..."
+    fontSize: "..."
+    fontWeight: "..."
+    lineHeight: "..."
+    letterSpacing: "..."
+  body-md: { ... }
+  label-sm: { ... }
+rounded:
+  sm: "4px"
+  md: "8px"
+  full: "9999px"
+spacing:
+  base: "8px"
+  xs: "4px" | sm | md | lg | xl
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"   # token references resolve via curly-brace path
+    textColor: "{colors.on-surface}"
+    rounded: "{rounded.md}"
+    padding: "8px 16px"
+---
+\`\`\`
+
+### Body sections
+
+In canonical order (per Google spec):
+
+1. **Overview** — LLM-generated atmosphere prose
+2. **Colors** — Light + dark mode tables, semantic roles
+3. **Typography** — Family list + type scale table
+4. **Layout** — Base unit, container, grid
+5. **Elevation & Depth** — Shadow stacks + gradients
+6. **Shapes** — Border-radius scale
+7. **Components** — Per-variant button styles
+8. **Do's and Don'ts** — Inferred + extracted brand rules
+
+ExtractVibe extension sections (preserved by the spec):
+
+- **Voice** — Tone spectrum, copywriting style, sample copy
+- **Logos** — Per-variant URL/format/confidence table
+- **Sources** — Permalinks to brand kit, guidelines, raw JSON
+
+## Quality gating
+
+DESIGN.md is only generated when the extraction passes the quality gate (qualityScore ≥ 30). Empty extractions don't produce useless DESIGN.md files.
+
+When the LLM call for the Overview prose fails, the file falls back to deterministic prose templated from the brand vibe summary. Look for \`X-DesignMd-Lint\` response header on the export endpoint for build-time signal.
+
+## Lint
+
+ExtractVibe runs the [Google DESIGN.md lint rules](https://github.com/google-labs-code/design.md) (ported to TypeScript) on every generated file:
+
+- **Errors** — duplicate sections, out-of-order sections, invalid hex, broken token refs, missing \`name\`
+- **Warnings** — missing \`primary\`, missing \`colors\`, low WCAG contrast, no frontmatter
+
+Lint status is surfaced in:
+
+- \`X-DesignMd-Lint\` HTTP header on the export endpoint
+- \`/api/brand/:domain/design.md/lint\` endpoint (full JSON findings)
+- \`extraction.designMdLintStatus\` in the history endpoint
+
+## Discovery
+
+Every per-brand page exposes the file via \`<link rel="alternate" type="text/markdown">\` for crawlers. The sitemap also includes every \`/api/brand/:domain/design.md\` URL. Agents looking up a brand find the file automatically.
+
+## Validation with the official CLI
+
+\`\`\`bash
+npx @google/design.md lint DESIGN.md
+npx @google/design.md export --format dtcg DESIGN.md > tokens.json
+npx @google/design.md export --format tailwind DESIGN.md
+\`\`\`
+
+## Resources
+
+- [DESIGN.md spec (Google Labs)](https://github.com/google-labs-code/design.md)
+- [awesome-design-md (community examples)](https://github.com/VoltAgent/awesome-design-md)
+- [W3C Design Tokens Format](https://www.designtokens.org/)
+- [ExtractVibe DESIGN.md feature page](https://extractvibe.com/design-md)
+`;
+}
+
 // ─── Full docs (concatenation of all sections) ──────────────────────────
 
 export function getFullDocsMd(): string {
@@ -2103,6 +2243,7 @@ export function getFullDocsMd(): string {
     getAuthenticationMd(),
     getExtractMd(),
     getExportMd(),
+    getDesignMdDocsMd(),
     getBrandMd(),
     getCreditsMd(),
     getKeysMd(),

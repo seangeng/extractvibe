@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useRevalidator } from "react-router";
-import { Globe, Check, X, Code2, Loader2, Eye, Braces, Copy, ChevronDown, ChevronRight, Download } from "lucide-react";
+import { Globe, Check, X, Code2, Loader2, Eye, Braces, Copy, ChevronDown, ChevronRight, Download, FileText, ExternalLink } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import { CodeBlock } from "~/components/docs/code-block";
 import { MarketingFooter } from "~/components/marketing-layout";
 import type { Route } from "./+types/brand.$domain";
+import type { Env } from "../../server/env";
 import type {
   ExtractVibeBrandKit,
   ColorValue,
@@ -33,19 +34,26 @@ const MAX_PUBLIC_EXTRACTIONS_PER_IP = 5;
 // Max public auto-extractions globally per hour (cost budget)
 const MAX_PUBLIC_EXTRACTIONS_PER_HOUR = 30;
 
+type CloudflareLoaderContext = {
+  env: Env;
+  ctx: ExecutionContext;
+};
+
 export async function loader({ params, context, request }: Route.LoaderArgs) {
   const domain = params.domain!;
-  const env = context.cloudflare.env;
+  const cloudflare = context.cloudflare as CloudflareLoaderContext;
+  const env = cloudflare.env;
 
   // Block obviously invalid or private domains
   if (isPrivateDomain(domain)) {
     throw new Response("Not found", { status: 404 });
   }
 
-  // Check for cached brand kit with metadata
-  const [cached, metaJson] = await Promise.all([
+  // Check for cached brand kit with metadata and optional DESIGN.md artifact.
+  const [cached, metaJson, designMd] = await Promise.all([
     env.CACHE.get(`brand:${domain}`, "json"),
     env.CACHE.get(`brand:${domain}:meta`, "json"),
+    env.CACHE.get(`design-md:${domain}`, "text"),
   ]);
 
   const meta = metaJson as { extractedAt: number; jobId: string } | null;
@@ -54,10 +62,16 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
     // Stale-while-revalidate: serve cached data, trigger background re-extract if stale
     const age = meta?.extractedAt ? (Date.now() - meta.extractedAt) / 1000 : Infinity;
     if (age > STALE_AFTER) {
-      const ctx = context.cloudflare.ctx;
+      const ctx = cloudflare.ctx;
       ctx.waitUntil(triggerExtraction(env, domain));
     }
-    return { kit: cached as ExtractVibeBrandKit, domain, status: "ready" as const, jobId: null };
+    return {
+      kit: cached as ExtractVibeBrandKit,
+      domain,
+      status: "ready" as const,
+      jobId: null,
+      designMd: designMd || null,
+    };
   }
 
   // No cache — check if there's already an extraction in progress
@@ -66,7 +80,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   ).bind(domain).first<{ id: string; status: string }>();
 
   if (existing) {
-    return { kit: null, domain, status: "extracting" as const, jobId: existing.id };
+    return { kit: null, domain, status: "extracting" as const, jobId: existing.id, designMd: null };
   }
 
   // ── Rate limits before auto-starting ──
@@ -77,7 +91,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   ).bind(domain).first<{ cnt: number }>();
 
   if (domainCount && domainCount.cnt >= 3) {
-    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null, designMd: null };
   }
 
   // 2. Per-IP: max 5 per day (prevent one visitor from triggering many domains)
@@ -87,7 +101,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   const ipCount = ipCountRaw ? parseInt(ipCountRaw, 10) : 0;
 
   if (ipCount >= MAX_PUBLIC_EXTRACTIONS_PER_IP) {
-    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null, designMd: null };
   }
 
   // 3. Global hourly budget (prevent mass abuse across all domains)
@@ -96,7 +110,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   const globalCount = globalCountRaw ? parseInt(globalCountRaw, 10) : 0;
 
   if (globalCount >= MAX_PUBLIC_EXTRACTIONS_PER_HOUR) {
-    return { kit: null, domain, status: "rate_limited" as const, jobId: null };
+    return { kit: null, domain, status: "rate_limited" as const, jobId: null, designMd: null };
   }
 
   // All checks passed — start extraction and increment counters
@@ -112,13 +126,13 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   });
 
   // Increment rate limit counters (fire-and-forget)
-  const ctx = context.cloudflare.ctx;
+  const ctx = cloudflare.ctx;
   ctx.waitUntil(Promise.all([
     env.CACHE.put(ipKey, String(ipCount + 1), { expirationTtl: 86400 }),
     env.CACHE.put(globalKey, String(globalCount + 1), { expirationTtl: 3600 }),
   ]));
 
-  return { kit: null, domain, status: "extracting" as const, jobId };
+  return { kit: null, domain, status: "extracting" as const, jobId, designMd: null };
 }
 
 /** Block private IPs, localhost, and obviously invalid domains */
@@ -140,7 +154,7 @@ function isPrivateDomain(domain: string): boolean {
   return false;
 }
 
-async function triggerExtraction(env: Route.LoaderArgs["context"]["cloudflare"]["env"], domain: string): Promise<void> {
+async function triggerExtraction(env: Env, domain: string): Promise<void> {
   try {
     const existing = await env.DB.prepare(
       `SELECT id FROM extraction WHERE domain = ? AND status IN ('queued', 'running') LIMIT 1`
@@ -170,7 +184,9 @@ async function triggerExtraction(env: Route.LoaderArgs["context"]["cloudflare"][
   }
 }
 
-// ─── SEO Meta ────────────────────────────────────────────────────────────
+// ─── SEO Meta + Discovery Links ──────────────────────────────────────────
+// Per-route <link rel="alternate"> tags surface the DESIGN.md + JSON kit so
+// AI agents and crawlers can discover them directly from the brand page.
 
 export function meta({ data }: Route.MetaArgs) {
   if (!data) return [{ title: "Brand Not Found — ExtractVibe" }];
@@ -194,6 +210,20 @@ export function meta({ data }: Route.MetaArgs) {
     {
       property: "og:description",
       content: `Colors, fonts, voice, and vibe for ${domain}`,
+    },
+    {
+      tagName: "link",
+      rel: "alternate",
+      type: "text/markdown",
+      href: `https://extractvibe.com/api/brand/${domain}/design.md`,
+      title: "DESIGN.md (drop-in design system spec for AI agents)",
+    },
+    {
+      tagName: "link",
+      rel: "alternate",
+      type: "application/json",
+      href: `https://extractvibe.com/api/brand/${domain}`,
+      title: "Brand kit JSON",
     },
   ];
 }
@@ -474,6 +504,144 @@ function TypeScalePreview({ scale, families }: { scale: TypeScale; families?: Fo
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── DESIGN.md Panel ─────────────────────────────────────────────────────
+
+function DesignMdPanel({ domain, designMd }: { domain: string; designMd: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const [content, setContent] = useState<string | null>(designMd);
+  const [loading, setLoading] = useState(false);
+
+  const designMdUrl = `https://extractvibe.com/api/brand/${domain}/design.md`;
+
+  // If SSR didn't have the cached file, fetch it client-side (regenerates if needed).
+  useEffect(() => {
+    if (content || loading) return;
+    setLoading(true);
+    fetch(designMdUrl)
+      .then((r) => r.ok ? r.text() : null)
+      .then((t) => setContent(t))
+      .catch(() => setContent(null))
+      .finally(() => setLoading(false));
+  }, [content, loading, designMdUrl]);
+
+  const handleCopy = () => {
+    if (!content) return;
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const lineCount = content ? content.split("\n").length : 0;
+  const byteCount = content ? new TextEncoder().encode(content).length : 0;
+
+  return (
+    <section className="mx-auto max-w-4xl px-4 sm:px-6 py-12">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] overflow-hidden">
+        {/* Header */}
+        <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+                <h2 className="font-display text-base font-semibold tracking-tight">
+                  DESIGN.md
+                </h2>
+                <Badge variant="outline" className="text-[10px] tracking-wider uppercase">
+                  AI-ready
+                </Badge>
+              </div>
+              <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+                Drop into any project root. Cursor, Claude Code, v0, Lovable, and other AI coding agents read this file to generate on-brand UI.{" "}
+                <a
+                  href="https://github.com/google-labs-code/design.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-[hsl(var(--foreground))] underline-offset-2 hover:underline"
+                >
+                  Spec
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopy}
+                disabled={!content}
+                className="gap-1.5"
+              >
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href={designMdUrl} download="DESIGN.md">
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        {loading && !content && (
+          <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            Generating…
+          </div>
+        )}
+        {content && (
+          <>
+            <pre className="max-h-[420px] overflow-auto p-5 text-xs leading-relaxed font-mono">
+              <code>{content}</code>
+            </pre>
+            <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-5 py-2.5 text-xs text-[hsl(var(--muted-foreground))] tabular-nums flex items-center justify-between">
+              <span>{lineCount} lines · {byteCount.toLocaleString()} bytes</span>
+              <a
+                href={designMdUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-[hsl(var(--foreground))]"
+              >
+                View raw
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </>
+        )}
+        {!loading && !content && (
+          <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            DESIGN.md not yet generated for this brand.
+          </div>
+        )}
+
+        {/* Drop-in instructions */}
+        <details className="border-t border-[hsl(var(--border))] px-5 py-3">
+          <summary className="cursor-pointer text-xs font-medium text-[hsl(var(--muted-foreground))]">
+            How to use this file
+          </summary>
+          <div className="mt-3 space-y-2 text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">
+            <p>
+              <strong className="text-[hsl(var(--foreground))]">1.</strong> Save this file as <code className="rounded bg-[hsl(var(--muted))] px-1 py-0.5 font-mono">DESIGN.md</code> in your project root (sibling to <code className="rounded bg-[hsl(var(--muted))] px-1 py-0.5 font-mono">README.md</code>).
+            </p>
+            <p>
+              <strong className="text-[hsl(var(--foreground))]">2.</strong> AI agents that read project files (Claude Code, Cursor, v0, Lovable, Bolt, Windsurf) will discover it automatically.
+            </p>
+            <p>
+              <strong className="text-[hsl(var(--foreground))]">3.</strong> Validate or export tokens with the official CLI:
+            </p>
+            <pre className="rounded-md bg-[hsl(var(--muted))] px-3 py-2 font-mono text-[11px] overflow-x-auto">
+              npx @google/design.md lint DESIGN.md{"\n"}
+              npx @google/design.md export --format tailwind DESIGN.md
+            </pre>
+          </div>
+        </details>
+      </div>
+    </section>
   );
 }
 
@@ -852,7 +1020,7 @@ function highlightJsonString(code: string): string {
 export default function PublicBrandPage({
   loaderData,
 }: Route.ComponentProps) {
-  const { kit, domain, status, jobId } = loaderData;
+  const { kit, domain, status, jobId, designMd } = loaderData;
   const revalidator = useRevalidator();
   const [viewMode, setViewMode] = useState<ViewMode>("visual");
 
@@ -1427,6 +1595,10 @@ export default function PublicBrandPage({
             </section>
           </>
         )}
+
+        {/* ─── DESIGN.md Panel ────────────────────────────────────────── */}
+        <hr className="border-[hsl(var(--border))]" />
+        <DesignMdPanel domain={domain} designMd={designMd} />
 
         {/* ─── Developer Access ───────────────────────────────────────── */}
         <hr className="border-[hsl(var(--border))]" />

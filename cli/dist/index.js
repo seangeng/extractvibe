@@ -1,8 +1,188 @@
 #!/usr/bin/env node
+var __require = /* @__PURE__ */ ((x2) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x2, {
+  get: (a, b2) => (typeof require !== "undefined" ? require : a)[b2]
+}) : x2)(function(x2) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x2 + '" is not supported');
+});
+
+// node_modules/@fingerprintiq/pulse/dist/index.mjs
+import { createHash as m } from "crypto";
+import { hostname as O, cpus as _, totalmem as M, platform as v, arch as E, networkInterfaces as C, release as S, uptime as R } from "os";
+import { existsSync as b } from "fs";
+var T = ((n) => typeof __require < "u" ? __require : typeof Proxy < "u" ? new Proxy(n, { get: (e, t) => (typeof __require < "u" ? __require : e)[t] }) : n)(function(n) {
+  if (typeof __require < "u") return __require.apply(this, arguments);
+  throw Error('Dynamic require of "' + n + '" is not supported');
+});
+function h(n) {
+  return m("sha256").update(n).digest("hex");
+}
+function w() {
+  let n = C();
+  for (let e of Object.keys(n)) {
+    let t = n[e];
+    if (t) {
+      for (let r of t) if (!r.internal && r.mac && r.mac !== "00:00:00:00:00:00") return r.mac;
+    }
+  }
+  return null;
+}
+function N() {
+  return process.env.GITHUB_ACTIONS ? "github-actions" : process.env.GITLAB_CI ? "gitlab-ci" : process.env.CIRCLECI ? "circleci" : process.env.JENKINS_URL ? "jenkins" : process.env.TRAVIS ? "travis" : process.env.BUILDKITE ? "buildkite" : process.env.CODEBUILD_BUILD_ID ? "codebuild" : process.env.TF_BUILD ? "azure-devops" : process.env.CI ? "ci" : null;
+}
+function D() {
+  if (process.env.CODESPACES) return "codespaces";
+  if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
+  if (process.env.WSL_DISTRO_NAME) return "wsl";
+  if (process.env.DOCKER_CONTAINER) return "docker";
+  if (process.env.container) return "container";
+  try {
+    if (b("/.dockerenv")) return "docker";
+  } catch {
+  }
+  return null;
+}
+function A() {
+  let n = process.env.SHELL || process.env.ComSpec || null;
+  if (!n) return null;
+  let e = n.replace(/\\/g, "/").split("/");
+  return e[e.length - 1] ?? null;
+}
+function L() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale ?? null;
+  } catch {
+    return null;
+  }
+}
+function F() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    return null;
+  }
+}
+function f() {
+  let n = v(), e = S();
+  if (n === "darwin") {
+    let t = parseInt(e.split(".")[0] ?? "", 10);
+    if (!isNaN(t)) return `macOS ${t - 9}`;
+  }
+  if (n === "linux") {
+    try {
+      let r = T("fs").readFileSync("/etc/os-release", "utf-8").match(/PRETTY_NAME="([^"]+)"/);
+      if (r) return r[1];
+    } catch {
+    }
+    return `Linux ${e}`;
+  }
+  return n === "win32" ? `Windows ${e}` : e;
+}
+function d() {
+  return process.env.TERM_PROGRAM ?? process.env.TERMINAL_EMULATOR ?? null;
+}
+function k() {
+  if (process.env.npm_config_user_agent) {
+    let n = process.env.npm_config_user_agent;
+    if (n.startsWith("bun")) return "bun";
+    if (n.startsWith("pnpm")) return "pnpm";
+    if (n.startsWith("yarn")) return "yarn";
+    if (n.startsWith("npm")) return "npm";
+  }
+  return null;
+}
+function x() {
+  return process.env.NVM_DIR ? "nvm" : process.env.FNM_DIR || process.env.FNM_MULTISHELL_PATH ? "fnm" : process.env.VOLTA_HOME ? "volta" : process.env.ASDF_DIR ? "asdf" : null;
+}
+function s() {
+  let n = v(), e = E(), t = _(), r = t.length > 0 ? t[0]?.model ?? null : null, o = t.length > 0 ? t.length : null, a = M(), l = a > 0 ? Math.round(a / 1024 ** 3 * 10) / 10 : null, y = h(O()), c = w(), I = c ? h(c) : "no-mac", u = N(), p = D(), P = [y, I, r ?? "unknown-cpu", String(o ?? 0), String(l ?? 0), n, e, f() ?? "unknown-osver", d() ?? "unknown-term"].join("|");
+  return { fingerprintHash: m("sha256").update(P).digest("hex"), os: n, arch: e, cpuModel: r, coreCount: o, memoryGb: l, runtime: "node", runtimeVersion: process.version, shell: A(), isCi: u !== null, isContainer: p !== null, ciProvider: u, containerType: p, locale: L(), timezone: F(), osVersion: f(), terminalEmulator: d(), packageManager: k(), nodeVersionMajor: parseInt(process.versions.node.split(".")[0] ?? "", 10) || null, isTty: process.stdout.isTTY ?? false, terminalColumns: process.stdout.columns ?? null, wslDistro: process.env.WSL_DISTRO_NAME ?? null, nodeVersionManager: x(), systemUptime: Math.round(R()), processVersions: process.versions };
+}
+var i = class {
+  endpoint;
+  apiKey;
+  tool;
+  version;
+  maxBatchSize;
+  buffer = [];
+  machineId = null;
+  timer = null;
+  flushing = false;
+  constructor(e) {
+    this.endpoint = e.endpoint ?? "https://fingerprintiq.com", this.apiKey = e.apiKey, this.tool = e.tool, this.version = e.version, this.maxBatchSize = e.maxBatchSize ?? 25;
+    let t = e.flushInterval ?? 3e4;
+    this.timer = setInterval(() => {
+      this.flush();
+    }, t), this.timer.unref();
+  }
+  async identify(e) {
+    try {
+      let t = await fetch(`${this.endpoint}/v1/pulse/identify`, { method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": this.apiKey }, body: JSON.stringify(e) });
+      if (t.ok) {
+        let r = await t.json();
+        this.machineId = r.machineId ?? null;
+      }
+    } catch {
+    }
+  }
+  enqueue(e) {
+    this.buffer.push(e), this.buffer.length >= this.maxBatchSize && this.flush();
+  }
+  async flush() {
+    if (this.flushing || this.buffer.length === 0) return;
+    this.flushing = true;
+    let e = this.buffer.splice(0, this.maxBatchSize);
+    try {
+      let t = { machineId: this.machineId, tool: this.tool, toolVersion: this.version, events: e };
+      await fetch(`${this.endpoint}/v1/pulse/event`, { method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": this.apiKey }, body: JSON.stringify(t) });
+    } catch {
+    } finally {
+      this.flushing = false;
+    }
+  }
+  async shutdown() {
+    this.timer && (clearInterval(this.timer), this.timer = null), await this.flush();
+  }
+};
+function K(n) {
+  return n ? process.env.DO_NOT_TRACK === "1" || process.env.DO_NOT_TRACK === "true" || process.env.FINGERPRINTIQ_OPTOUT === "1" || process.env.FINGERPRINTIQ_OPTOUT === "true" : false;
+}
+var g = class {
+  config;
+  disabled;
+  transport = null;
+  initialized = false;
+  initPromise = null;
+  constructor(e) {
+    this.config = { respectOptOut: true, ...e }, this.disabled = K(this.config.respectOptOut ?? true);
+  }
+  async init() {
+    if (!(this.initialized || this.disabled)) {
+      if (this.initPromise) {
+        await this.initPromise;
+        return;
+      }
+      this.initPromise = (async () => {
+        this.transport = new i(this.config);
+        let e = s();
+        await this.transport.identify(e), this.initialized = true;
+      })(), await this.initPromise;
+    }
+  }
+  async track(e, t) {
+    if (this.disabled || (await this.init(), !this.transport)) return;
+    let r = { command: e, timestamp: Date.now(), ...t?.durationMs !== void 0 && typeof t.durationMs == "number" ? { durationMs: t.durationMs } : {}, ...t?.success !== void 0 && typeof t.success == "boolean" ? { success: t.success } : {}, metadata: t };
+    this.transport.enqueue(r);
+  }
+  async shutdown() {
+    this.disabled || this.transport && await this.transport.shutdown();
+  }
+};
 
 // index.ts
 var VERSION = "0.1.0";
 var API_BASE = "https://extractvibe.com/api";
+var FINGERPRINTIQ_PULSE_KEY = "fiq_live_382ec7bb450690e211a5db476151e7b67c7ab8424be6660bbf2fe0900d5a67ad";
 var VALID_FORMATS = ["json", "css", "tailwind", "markdown", "tokens"];
 var POLL_INTERVAL_MS = 1500;
 var POLL_TIMEOUT_MS = 12e4;
@@ -20,20 +200,20 @@ var ansi = {
   clearLine: isTTY ? "\x1B[2K" : "",
   cursorUp: isTTY ? "\x1B[1A" : ""
 };
-function green(s) {
-  return `${ansi.green}${s}${ansi.reset}`;
+function green(s2) {
+  return `${ansi.green}${s2}${ansi.reset}`;
 }
-function cyan(s) {
-  return `${ansi.cyan}${s}${ansi.reset}`;
+function cyan(s2) {
+  return `${ansi.cyan}${s2}${ansi.reset}`;
 }
-function red(s) {
-  return `${ansi.red}${s}${ansi.reset}`;
+function red(s2) {
+  return `${ansi.red}${s2}${ansi.reset}`;
 }
-function bold(s) {
-  return `${ansi.bold}${s}${ansi.reset}`;
+function bold(s2) {
+  return `${ansi.bold}${s2}${ansi.reset}`;
 }
-function dim(s) {
-  return `${ansi.dim}${s}${ansi.reset}`;
+function dim(s2) {
+  return `${ansi.dim}${s2}${ansi.reset}`;
 }
 var SPINNER_FRAMES = ["\u25D0", "\u25D3", "\u25D1", "\u25D2"];
 var Spinner = class {
@@ -104,21 +284,21 @@ function parseArgs(argv) {
     help: false,
     version: false
   };
-  let i = 0;
-  while (i < argv.length) {
-    const arg = argv[i];
+  let i2 = 0;
+  while (i2 < argv.length) {
+    const arg = argv[i2];
     if (arg === "--help" || arg === "-h") {
       result.help = true;
-      i++;
+      i2++;
       continue;
     }
     if (arg === "--version" || arg === "-v") {
       result.version = true;
-      i++;
+      i2++;
       continue;
     }
     if (arg === "--format" || arg === "-f") {
-      const next = argv[++i];
+      const next = argv[++i2];
       if (!next || next.startsWith("-")) {
         fatal("--format requires a value: json, css, tailwind, markdown, or tokens");
       }
@@ -128,25 +308,25 @@ function parseArgs(argv) {
         );
       }
       result.format = next;
-      i++;
+      i2++;
       continue;
     }
     if (arg === "--output" || arg === "-o") {
-      const next = argv[++i];
+      const next = argv[++i2];
       if (!next || next.startsWith("-")) {
         fatal("--output requires a file path");
       }
       result.output = next;
-      i++;
+      i2++;
       continue;
     }
     if (arg === "--api-key" || arg === "--key") {
-      const next = argv[++i];
+      const next = argv[++i2];
       if (!next || next.startsWith("-")) {
         fatal("--api-key requires a value");
       }
       result.apiKey = next;
-      i++;
+      i2++;
       continue;
     }
     if (arg.startsWith("-")) {
@@ -159,7 +339,7 @@ Run ${bold("extractvibe --help")} for usage.`);
     } else {
       fatal(`Unexpected argument: ${arg}`);
     }
-    i++;
+    i2++;
   }
   return result;
 }
@@ -395,9 +575,9 @@ async function pollJobToCompletion(jobId, apiKey) {
             currentSpinner.succeed();
           } else if (!completedSteps.has(step)) {
             const label = STEP_LABELS[step] || step;
-            const s = new Spinner(label);
-            s.start();
-            s.succeed();
+            const s2 = new Spinner(label);
+            s2.start();
+            s2.succeed();
           }
           completedSteps.add(step);
         }
@@ -456,7 +636,7 @@ function summarizeBrandKit(kit) {
     colorCount = rawPalette.length;
   }
   const primaryColor = lightMode?.primary?.hex || null;
-  const fontNames = (kit?.typography?.families || []).map((f) => f.name).filter(Boolean);
+  const fontNames = (kit?.typography?.families || []).map((f2) => f2.name).filter(Boolean);
   const vibeSummary = kit?.vibe?.summary || null;
   const dosCount = kit?.rules?.dos?.length || 0;
   const dontsCount = kit?.rules?.donts?.length || 0;
@@ -506,19 +686,49 @@ async function writeFile(filePath, content) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function getPulseCommand(args) {
+  if (args.help || !args.url) return "help";
+  if (args.version) return "version";
+  return "extract";
+}
+async function trackCliInvocation(args) {
+  try {
+    const pulse = new g({
+      apiKey: FINGERPRINTIQ_PULSE_KEY,
+      tool: "extractvibe-cli",
+      version: VERSION,
+      flushInterval: 1e3,
+      maxBatchSize: 1
+    });
+    await pulse.track(getPulseCommand(args), {
+      format: args.format,
+      hasOutput: Boolean(args.output),
+      hasInlineApiKey: Boolean(args.apiKey),
+      hasEnvApiKey: Boolean(process.env.EXTRACTVIBE_API_KEY),
+      hasUrl: Boolean(args.url)
+    });
+    await pulse.shutdown();
+  } catch {
+  }
+}
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const invocationTracked = trackCliInvocation(args);
   if (args.help) {
     printHelp();
-    process.exit(0);
+    await invocationTracked;
+    return;
   }
   if (args.version) {
     printVersion();
-    process.exit(0);
+    await invocationTracked;
+    return;
   }
   if (!args.url) {
     printHelp();
-    process.exit(1);
+    await invocationTracked;
+    process.exitCode = 1;
+    return;
   }
   const apiKey = args.apiKey || process.env.EXTRACTVIBE_API_KEY || null;
   if (!apiKey) {

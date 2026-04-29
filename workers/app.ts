@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { sentinel } from "@fingerprintiq/server/hono";
 import { createRequestHandler } from "react-router";
 import type { Env } from "../server/env";
 import { createAuth } from "../server/lib/auth";
@@ -16,6 +17,7 @@ import {
   getRateLimitsMd,
   getErrorsMd,
   getBrandKitSchemaMd,
+  getDesignMdDocsMd,
   getFullDocsMd,
 } from "../server/lib/docs-markdown";
 
@@ -40,6 +42,17 @@ app.use("/api/*", async (c, next) => {
     allowHeaders: ["Content-Type", "Authorization", "x-api-key"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })(c, next);
+});
+
+// ---------------------------------------------------------------------------
+// FingerprintIQ Sentinel
+// ---------------------------------------------------------------------------
+app.use("/api/*", async (c, next) => {
+  if (!c.env.FINGERPRINTIQ_SECRET_KEY) {
+    return next();
+  }
+
+  return sentinel({ apiKey: c.env.FINGERPRINTIQ_SECRET_KEY })(c, next);
 });
 
 // ---------------------------------------------------------------------------
@@ -189,6 +202,9 @@ app.get("/sitemap.xml", async (c) => {
     { loc: "/docs/rate-limits.md", changefreq: "weekly", priority: "0.7" },
     { loc: "/docs/errors.md", changefreq: "weekly", priority: "0.7" },
     { loc: "/docs/schema.md", changefreq: "weekly", priority: "0.7" },
+    { loc: "/docs/design-md.md", changefreq: "weekly", priority: "0.7" },
+    // DESIGN.md feature
+    { loc: "/design-md", changefreq: "monthly", priority: "0.9" },
   ];
 
   // Dynamic brand pages — get all unique domains with completed extractions
@@ -208,11 +224,16 @@ app.get("/sitemap.xml", async (c) => {
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
   </url>`),
-    ...brandDomains.map(domain => `  <url>
+    ...brandDomains.flatMap(domain => [`  <url>
     <loc>${baseUrl}/brand/${domain}</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
-  </url>`),
+  </url>`,
+    `  <url>
+    <loc>${baseUrl}/api/brand/${domain}/design.md</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>`]),
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -241,6 +262,7 @@ const docsRoutes: Record<string, () => string> = {
   "rate-limits.md": getRateLimitsMd,
   "errors.md": getErrorsMd,
   "schema.md": getBrandKitSchemaMd,
+  "design-md.md": getDesignMdDocsMd,
 };
 
 app.get("/docs/:file", (c) => {
@@ -268,7 +290,6 @@ app.get("/llms-full.txt", (c) => {
 // ---------------------------------------------------------------------------
 app.all("*", async (c) => {
   const handler = createRequestHandler(
-    // @ts-expect-error - virtual module resolved by Vite at build time
     () => import("virtual:react-router/server-build"),
     import.meta.env.MODE
   );

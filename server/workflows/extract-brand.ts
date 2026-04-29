@@ -292,20 +292,125 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             }
           }
 
-          // Cache result (30 days) with metadata for stale-while-revalidate
-          const resultJson = JSON.stringify(kit);
-          const cacheTtl = 60 * 60 * 24 * 30;
-          await Promise.all([
-            this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: cacheTtl }),
-            this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: cacheTtl }),
-            this.env.CACHE.put(`brand:${domain}:meta`, JSON.stringify({ extractedAt: Date.now(), jobId }), { expirationTtl: cacheTtl }),
-          ]);
+          // Compute extraction quality score (0-100) BEFORE caching/persisting,
+          // so we can gate on it. Threshold of 30 catches the empty-defaults
+          // failure mode (typically scores 0-20: just inferred white + empty voice).
+          const qualityScore = [
+            kit.identity?.brandName ? 10 : 0,
+            (kit.logos?.length || 0) > 0 ? 15 : 0,
+            (kit.colors?.rawPalette?.length || 0) >= 3 ? 15 : 5,
+            (kit.typography?.families?.length || 0) > 0 ? 15 : 0,
+            (kit.voice?.sampleCopy?.length || 0) > 0 ? 15 : 0,
+            kit.vibe && (kit.vibe.confidence ?? 0) >= 0.4 ? 10 : 0,
+            kit.rules?.dos?.length ? 10 : 0,
+            kit.officialGuidelines?.hasOfficialKit ? 10 : 0,
+          ].reduce((a, b) => a + b, 0);
 
-          // Update D1 extraction record
+          kit.meta.qualityScore = qualityScore;
+
+          // Collect LLM stage degradations so we can surface them honestly,
+          // even when overall quality clears the gate. Without this, an
+          // OpenRouter outage looks identical to a successful extraction
+          // capped at ~65/100.
+          const degradedStages: string[] = [];
+          if (voiceData?.degraded) {
+            degradedStages.push(`analyze-voice (${voiceData.degradationReason || "unknown"})`);
+          }
+          if (vibeData?.vibe?.degraded) {
+            degradedStages.push(`synthesize-vibe (${vibeData.vibe.degradationReason || "unknown"})`);
+          }
+
+          const QUALITY_THRESHOLD = 30;
+          const passedQualityGate = qualityScore >= QUALITY_THRESHOLD;
+          const cacheTtl = 60 * 60 * 24 * 30;
+
+          // Generate DESIGN.md alongside the JSON kit. Only run on extractions
+          // that pass the quality gate — generating one for an empty kit would
+          // produce a file with placeholder data that's worse than nothing.
+          let designMdLintStatus: "ok" | "warnings" | "errors" | "skipped" = "skipped";
+          let designMdLintErrorCount = 0;
+          let designMdLintWarningCount = 0;
+          if (passedQualityGate) {
+            try {
+              const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
+              const dm = await generateDesignMd(kit, {
+                openRouterApiKey: this.env.OPENROUTER_API_KEY,
+                useLlm: true,
+              });
+              designMdLintErrorCount = dm.lintResult.errors.length;
+              designMdLintWarningCount = dm.lintResult.warnings.length;
+              designMdLintStatus = designMdLintErrorCount > 0 ? "errors"
+                : designMdLintWarningCount > 0 ? "warnings"
+                : "ok";
+
+              await this.env.CACHE.put(`design-md:${jobId}`, dm.content, { expirationTtl: cacheTtl });
+              await this.env.CACHE.put(`design-md:${domain}`, dm.content, { expirationTtl: cacheTtl });
+
+              log({
+                level: "info",
+                event: "design-md.generated",
+                jobId,
+                domain,
+                meta: {
+                  bytes: dm.content.length,
+                  lintStatus: designMdLintStatus,
+                  errorCount: designMdLintErrorCount,
+                  warningCount: designMdLintWarningCount,
+                  proseDegraded: dm.proseDegraded,
+                },
+              });
+            } catch (err) {
+              log({
+                level: "error",
+                event: "design-md.failed",
+                jobId,
+                domain,
+                error: err instanceof Error ? err.message : String(err),
+              });
+              // Non-fatal — main JSON kit still ships.
+            }
+          }
+
+          // Always cache the result by jobId so the user can inspect what we got,
+          // even if quality is poor. Only populate the public-facing brand:{domain}
+          // lookup when quality passes — don't pollute it with garbage extractions.
+          const resultJson = JSON.stringify(kit);
+          await this.env.CACHE.put(`result:${jobId}`, resultJson, { expirationTtl: cacheTtl });
+          if (passedQualityGate) {
+            await Promise.all([
+              this.env.CACHE.put(`brand:${domain}`, resultJson, { expirationTtl: cacheTtl }),
+              this.env.CACHE.put(`brand:${domain}:meta`, JSON.stringify({ extractedAt: Date.now(), jobId }), { expirationTtl: cacheTtl }),
+            ]);
+          }
+
+          // Update D1 extraction record. Failed-quality extractions get
+          // status='failed' with a descriptive error, so the user sees an
+          // honest signal in their history instead of a phantom success.
+          // When quality passes but LLM stages degraded, mark complete but
+          // surface which stages fell back so partial results are visible.
+          const dbStatus = passedQualityGate ? "complete" : "failed";
+          let errorMessage: string | null;
+          if (!passedQualityGate) {
+            errorMessage = `Low extraction quality (${qualityScore}/100). Site may be JS-heavy with content not rendered in time, or block headless browsers. Try again or report the URL.`;
+          } else if (degradedStages.length > 0) {
+            errorMessage = `Partial extraction: LLM enrichment fell back to defaults for ${degradedStages.join(", ")}.`;
+          } else {
+            errorMessage = null;
+          }
           try {
             await this.env.DB.prepare(
-              `UPDATE extraction SET status = 'complete', "resultKey" = ?, "durationMs" = ?, "completedAt" = datetime('now') WHERE id = ?`
-            ).bind(`result:${jobId}`, kit.meta.durationMs, jobId).run();
+              `UPDATE extraction SET status = ?, "resultKey" = ?, "durationMs" = ?, "qualityScore" = ?, "errorMessage" = ?, "designMdLintStatus" = ?, "designMdLintErrorCount" = ?, "designMdLintWarningCount" = ?, "completedAt" = datetime('now') WHERE id = ?`
+            ).bind(
+              dbStatus,
+              `result:${jobId}`,
+              kit.meta.durationMs,
+              qualityScore,
+              errorMessage,
+              designMdLintStatus,
+              designMdLintErrorCount,
+              designMdLintWarningCount,
+              jobId
+            ).run();
           } catch { /* non-fatal */ }
 
           // Clean up intermediate KV keys
@@ -316,24 +421,19 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             this.env.CACHE.delete(`${kvKey}:vibe`),
           ]);
 
-          await this.reportProgress(jobId, "score-package", "complete", 100);
-
-          // Compute extraction quality score (0-100)
-          const qualityScore = [
-            kit.identity?.brandName ? 10 : 0,
-            (kit.logos?.length || 0) > 0 ? 15 : 0,
-            (kit.colors?.rawPalette?.length || 0) >= 3 ? 15 : 5,
-            (kit.typography?.families?.length || 0) > 0 ? 15 : 0,
-            kit.voice ? 15 : 0,
-            kit.vibe ? 10 : 0,
-            kit.rules?.dos?.length ? 10 : 0,
-            kit.officialGuidelines?.hasOfficialKit ? 10 : 0,
-          ].reduce((a, b) => a + b, 0);
+          await this.reportProgress(
+            jobId,
+            "score-package",
+            passedQualityGate ? "complete" : "failed",
+            100,
+            errorMessage || undefined
+          );
 
           const finalSummary = {
-            success: true,
+            success: passedQualityGate,
             domain,
             jobId,
+            qualityScore,
             durationMs: kit.meta.durationMs,
             logosFound: kit.logos?.length || 0,
             colorsFound: kit.colors?.rawPalette?.length || 0,
@@ -346,7 +446,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             event: "extraction.quality",
             jobId,
             domain,
-            meta: { qualityScore, ...finalSummary },
+            meta: { ...finalSummary, passedQualityGate },
           });
           log({
             level: "info",

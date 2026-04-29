@@ -20,6 +20,7 @@ export default [
   route("features/logos", "routes/features.logos.tsx"),
   route("features/gradients", "routes/features.gradients.tsx"),
   route("features/design-system", "routes/features.design-system.tsx"),
+  route("design-md", "routes/design-md.tsx"),
 
   // Use Cases
   route("use-cases/design-agencies", "routes/use-cases.design-agencies.tsx"),

@@ -88,8 +88,10 @@ apiRouter.get("/openapi.json", async (c) => {
       "/api/extract": { post: { summary: "Start brand extraction", description: "Anonymous: 3/day. Authenticated: uses 1 credit.", requestBody: { content: { "application/json": { schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } } }, responses: { "202": { description: "Extraction started" }, "429": { description: "Rate limited" } } } },
       "/api/extract/{jobId}": { get: { summary: "Poll job status", parameters: [{ name: "jobId", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "Job status" } } } },
       "/api/extract/{jobId}/result": { get: { summary: "Get extraction result", responses: { "200": { description: "Full brand kit" } } } },
-      "/api/extract/{jobId}/export/{format}": { get: { summary: "Export brand kit", parameters: [{ name: "format", in: "path", required: true, schema: { type: "string", enum: ["json", "css", "tailwind", "markdown", "tokens"] } }], responses: { "200": { description: "Exported file" } } } },
+      "/api/extract/{jobId}/export/{format}": { get: { summary: "Export brand kit", parameters: [{ name: "format", in: "path", required: true, schema: { type: "string", enum: ["json", "css", "tailwind", "markdown", "tokens", "design-md"] } }], responses: { "200": { description: "Exported file" } } } },
       "/api/brand/{domain}": { get: { summary: "Get cached brand kit by domain", responses: { "200": { description: "Brand kit" }, "404": { description: "Not found" } } } },
+      "/api/brand/{domain}/design.md": { get: { summary: "Public DESIGN.md for the domain", description: "Returns a DESIGN.md file (text/markdown) conforming to the Google DESIGN.md spec. Drop into any project root for AI agents to consume. Edge-cached 1h.", responses: { "200": { description: "DESIGN.md content", content: { "text/markdown": {} } }, "404": { description: "Not extracted yet" } } } },
+      "/api/brand/{domain}/design.md/lint": { get: { summary: "Lint report for a domain's DESIGN.md", responses: { "200": { description: "JSON lint findings (errors + warnings)" } } } },
       "/api/extract/history": { get: { summary: "List extraction history", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Extraction list" } } } },
       "/api/credits": { get: { summary: "Get credit balance", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Credits" } } } },
       "/api/keys": { get: { summary: "List API keys", security: [{ cookieAuth: [] }], responses: { "200": { description: "Key list" } } }, post: { summary: "Create API key", security: [{ cookieAuth: [] }], responses: { "201": { description: "Key created" } } } },
@@ -123,6 +125,8 @@ apiRouter.get("/", (c) => {
       result: "GET /api/extract/:jobId/result",
       export: "GET /api/extract/:jobId/export/:format",
       brand: "GET /api/brand/:domain",
+      brandDesignMd: "GET /api/brand/:domain/design.md",
+      brandDesignMdLint: "GET /api/brand/:domain/design.md/lint",
       history: "GET /api/extract/history",
       credits: "GET /api/credits",
       keys: "GET /api/keys",
@@ -327,7 +331,9 @@ apiRouter.get("/extract/history", async (c) => {
   const auth = await withAuthAndRateLimit(c, "read");
 
   const result = await c.env.DB.prepare(
-    `SELECT id, domain, url, status, "durationMs", "createdAt", "completedAt"
+    `SELECT id, domain, url, status, "durationMs", "qualityScore", "errorMessage",
+            "designMdLintStatus", "designMdLintErrorCount", "designMdLintWarningCount",
+            "createdAt", "completedAt"
      FROM extraction
      WHERE "userId" = ?
      ORDER BY "createdAt" DESC
@@ -349,7 +355,22 @@ apiRouter.get("/extract/:jobId", async (c) => {
   try {
     const instance = await c.env.EXTRACT_BRAND.get(jobId);
     const status = await instance.status();
-    return c.json({ jobId, status });
+
+    // Augment with D1 quality + error info so callers can see when an
+    // extraction "completed" but was gated as low quality.
+    const dbRow = await c.env.DB.prepare(
+      `SELECT status, "qualityScore", "errorMessage" FROM extraction WHERE id = ?`
+    ).bind(jobId).first<{ status: string; qualityScore: number | null; errorMessage: string | null }>();
+
+    return c.json({
+      jobId,
+      status,
+      ...(dbRow && {
+        dbStatus: dbRow.status,
+        qualityScore: dbRow.qualityScore,
+        errorMessage: dbRow.errorMessage,
+      }),
+    });
   } catch {
     return c.json({ error: "Job not found" }, 404);
   }
@@ -386,6 +407,58 @@ apiRouter.get("/brand/:domain", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Brand DESIGN.md — public per-domain DESIGN.md (text/markdown, edge-cached)
+// Designed to drop straight into the root of any project as `DESIGN.md`.
+// Fully discoverable via <link rel="alternate"> + sitemap.
+// ---------------------------------------------------------------------------
+apiRouter.get("/brand/:domain/design.md", async (c) => {
+  await withRateLimit(c, "read");
+  const domain = c.req.param("domain");
+
+  // 1. Try the pre-generated cached file first
+  let content = await c.env.CACHE.get(`design-md:${domain}`, "text");
+
+  // 2. Fall back to generating on-demand from the cached JSON kit
+  if (!content) {
+    const cachedKit = await c.env.CACHE.get(`brand:${domain}`, "json") as ExtractVibeBrandKit | null;
+    if (!cachedKit) {
+      return new Response(
+        `# DESIGN.md not found\n\nNo brand kit cached for "${domain}". Trigger an extraction at https://extractvibe.com/dashboard/extract first.`,
+        { status: 404, headers: { "Content-Type": "text/markdown; charset=utf-8" } }
+      );
+    }
+    const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
+    const dm = await generateDesignMd(cachedKit, {
+      openRouterApiKey: c.env.OPENROUTER_API_KEY,
+    });
+    content = dm.content;
+    await c.env.CACHE.put(`design-md:${domain}`, content, { expirationTtl: 60 * 60 * 72 });
+  }
+
+  return new Response(content, {
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Cache-Control": "public, max-age=3600, s-maxage=3600",
+      // Inline-by-default so it renders in the browser; agents will save with
+      // the canonical name from the URL.
+      "Link": `<https://extractvibe.com/api/brand/${domain}>; rel="canonical"; type="application/json"`,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brand DESIGN.md lint — JSON report of linter findings for the domain's file
+// ---------------------------------------------------------------------------
+apiRouter.get("/brand/:domain/design.md/lint", async (c) => {
+  await withRateLimit(c, "read");
+  const domain = c.req.param("domain");
+  const content = await c.env.CACHE.get(`design-md:${domain}`, "text");
+  if (!content) return c.json({ error: "DESIGN.md not generated for this domain yet." }, 404);
+  const { lintDesignMd } = await import("../lib/design-md-lint");
+  return c.json(lintDesignMd(content));
+});
+
+// ---------------------------------------------------------------------------
 // Export — download brand kit in various formats (authenticated only)
 // ---------------------------------------------------------------------------
 apiRouter.get("/extract/:jobId/export/:format", async (c) => {
@@ -418,6 +491,34 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
     });
   }
 
+  // DESIGN.md is special — it's pre-generated by the workflow and stored in KV.
+  // Read directly to avoid re-running the LLM call on every download.
+  if (format === "design-md") {
+    const cachedMd = await c.env.CACHE.get(`design-md:${jobId}`, "text");
+    if (!cachedMd) {
+      // Fall back to generating on-demand — useful for older extractions
+      // that pre-date the design.md feature.
+      const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
+      const dm = await generateDesignMd(kit, {
+        openRouterApiKey: c.env.OPENROUTER_API_KEY,
+      });
+      await c.env.CACHE.put(`design-md:${jobId}`, dm.content, { expirationTtl: 60 * 60 * 72 });
+      return new Response(dm.content, {
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": `attachment; filename="DESIGN.md"`,
+          "X-DesignMd-Lint": dm.lintResult.ok ? "ok" : `errors=${dm.lintResult.errors.length},warnings=${dm.lintResult.warnings.length}`,
+        },
+      });
+    }
+    return new Response(cachedMd, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="DESIGN.md"`,
+      },
+    });
+  }
+
   const { exportCssVariables, exportTailwindConfig, exportMarkdownReport, exportDesignTokens } =
     await import("../lib/export-formats");
 
@@ -430,7 +531,7 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
 
   const exporter = exporters[format];
   if (!exporter) {
-    return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens" }, 400);
+    return c.json({ error: "Invalid format. Use: json, css, tailwind, markdown, tokens, design-md" }, 400);
   }
 
   return new Response(exporter.fn(kit), {

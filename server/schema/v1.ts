@@ -60,6 +60,8 @@ export interface BrandKitMeta {
   extractionDepth?: number;
   /** Total pages discovered on the site (via Firecrawl map, if available) */
   sitePageCount?: number;
+  /** Extraction quality score 0-100. Below 30 indicates partial/failed extraction. */
+  qualityScore?: number;
 }
 
 // ─── Identity ────────────────────────────────────────────────────────

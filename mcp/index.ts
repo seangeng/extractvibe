@@ -11,10 +11,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Pulse } from "@fingerprintiq/pulse";
 import { z } from "zod";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
+const VERSION = "0.1.0";
+const FINGERPRINTIQ_PULSE_KEY =
+  "fiq_live_382ec7bb450690e211a5db476151e7b67c7ab8424be6660bbf2fe0900d5a67ad";
 const API_KEY = process.env.EXTRACTVIBE_API_KEY;
 const BASE_URL = (process.env.EXTRACTVIBE_BASE_URL ?? "https://extractvibe.com").replace(
   /\/$/,
@@ -23,6 +27,34 @@ const BASE_URL = (process.env.EXTRACTVIBE_BASE_URL ?? "https://extractvibe.com")
 
 const POLL_INTERVAL_MS = 3_000;
 const POLL_MAX_ATTEMPTS = 120; // 6 minutes max
+
+const pulse = new Pulse({
+  apiKey: FINGERPRINTIQ_PULSE_KEY,
+  tool: "extractvibe-mcp",
+  version: VERSION,
+  flushInterval: 1_000,
+  maxBatchSize: 1,
+});
+
+function trackMcpEvent(command: string, metadata?: Record<string, unknown>): void {
+  void pulse.track(command, metadata).catch(() => {
+    // Usage analytics must never affect MCP behavior.
+  });
+}
+
+async function shutdownPulse(): Promise<void> {
+  try {
+    await pulse.shutdown();
+  } catch {
+    // Best effort only.
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void shutdownPulse().finally(() => process.exit(0));
+  });
+}
 
 // ─── HTTP Helpers ────────────────────────────────────────────────────────────
 
@@ -976,7 +1008,7 @@ async function handleExtractBrand(url: string): Promise<string> {
 
 const server = new McpServer({
   name: "extractvibe",
-  version: "0.1.0",
+  version: VERSION,
 });
 
 // Tool: extract_brand
@@ -987,6 +1019,7 @@ server.tool(
     url: z.string().describe("The website URL to extract a brand kit from (e.g., https://stripe.com)"),
   },
   async ({ url }) => {
+    trackMcpEvent("extract_brand", { hasUrl: Boolean(url) });
     const result = await handleExtractBrand(url);
     return {
       content: [{ type: "text", text: result }],
@@ -1002,6 +1035,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)"),
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_colors", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1025,6 +1059,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)"),
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_typography", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1048,6 +1083,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)"),
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_voice", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1071,6 +1107,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)"),
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_rules", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1094,6 +1131,7 @@ server.tool(
     domain: z.string().describe("The domain to look up (e.g., stripe.com)"),
   },
   async ({ domain }) => {
+    trackMcpEvent("get_brand_vibe", { hasDomain: Boolean(domain) });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1120,6 +1158,7 @@ server.tool(
       .describe("Export format: css, tailwind, markdown, or tokens"),
   },
   async ({ domain, format }) => {
+    trackMcpEvent("export_brand", { hasDomain: Boolean(domain), format });
     const kit = await fetchBrandByDomain(domain);
     if (typeof kit === "string") {
       return { content: [{ type: "text", text: kit }] };
@@ -1163,9 +1202,10 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  trackMcpEvent("server_start");
 }
 
 main().catch((err) => {
   console.error("Fatal error starting ExtractVibe MCP server:", err);
-  process.exit(1);
+  void shutdownPulse().finally(() => process.exit(1));
 });
