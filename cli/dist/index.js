@@ -603,8 +603,8 @@ async function pollJobToCompletion(jobId, apiKey) {
             }
             completedSteps.add(step);
             const nextIdx = PIPELINE_STEPS.indexOf(step) + 1;
-            if (nextIdx < PIPELINE_STEPS.length) {
-              const nextStep = PIPELINE_STEPS[nextIdx];
+            const nextStep = PIPELINE_STEPS[nextIdx];
+            if (nextStep) {
               const nextLabel = STEP_LABELS[nextStep] || nextStep;
               currentSpinner = new Spinner(nextLabel);
               currentStep = nextStep;
@@ -697,8 +697,7 @@ async function trackCliInvocation(args) {
       apiKey: FINGERPRINTIQ_PULSE_KEY,
       tool: "extractvibe-cli",
       version: VERSION,
-      flushInterval: 1e3,
-      maxBatchSize: 1
+      flushInterval: 1e3
     });
     await pulse.track(getPulseCommand(args), {
       format: args.format,

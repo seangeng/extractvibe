@@ -33,7 +33,6 @@ const pulse = new Pulse({
   tool: "extractvibe-mcp",
   version: VERSION,
   flushInterval: 1_000,
-  maxBatchSize: 1,
 });
 
 function trackMcpEvent(command: string, metadata?: Record<string, unknown>): void {

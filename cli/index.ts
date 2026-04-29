@@ -705,7 +705,6 @@ async function trackCliInvocation(args: ParsedArgs): Promise<void> {
       tool: "extractvibe-cli",
       version: VERSION,
       flushInterval: 1_000,
-      maxBatchSize: 1,
     });
 
     await pulse.track(getPulseCommand(args), {

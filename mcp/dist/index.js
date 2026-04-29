@@ -198,8 +198,7 @@ var pulse = new g({
   apiKey: FINGERPRINTIQ_PULSE_KEY,
   tool: "extractvibe-mcp",
   version: VERSION,
-  flushInterval: 1e3,
-  maxBatchSize: 1
+  flushInterval: 1e3
 });
 function trackMcpEvent(command, metadata) {
   void pulse.track(command, metadata).catch(() => {
