@@ -6,7 +6,7 @@
  * actionable brand rules and archetype classification.
  */
 
-import { openRouterCompletion } from "../ai";
+import { aiCompletion, type LlmConfig } from "../ai";
 import { log } from "../logger";
 import {
   extractJsonFromResponse,
@@ -353,19 +353,22 @@ function buildFallbackOutput(
 
 export async function synthesizeVibe(
   input: VibeSynthesisInput,
-  openRouterApiKey: string
+  llmConfig: LlmConfig
 ): Promise<VibeSynthesisOutput> {
   const prompt = buildVibePrompt(input);
 
   let raw: string;
   try {
-    raw = await openRouterCompletion(
-      openRouterApiKey,
+    raw = await aiCompletion(
+      llmConfig,
       [{ role: "user", content: prompt }],
       {
         model: "google/gemini-2.5-flash",
         temperature: 0.4,
-        maxTokens: 3072,
+        // Vibe output is ~700-1000 tokens in practice. Cap at 2048 so we
+        // fit Qwen's 4096-token context budget (prompt is ~1400 tokens),
+        // avoiding a 413 → Gemma-fallback round-trip on every call.
+        maxTokens: 2048,
       }
     );
   } catch (err) {

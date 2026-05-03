@@ -74,42 +74,47 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
     );
 
     // -----------------------------------------------------------------------
-    // Step 2: Parse visual identity + Analyze voice (parallel)
-    // These two steps are independent — both read from the fetch KV data.
-    // Running them in parallel saves ~3-10s of LLM latency.
+    // Step 2: Process + score (combined)
+    // Collapses parse-and-analyze + synthesize-vibe + score-package into a
+    // single step. Eliminates 2 step framework transitions (~1.5-2s each)
+    // and the intermediate KV write/read round-trips between steps.
+    // Internal flow:
+    //   Tier 1 (parallel): parseVisual + analyzeVoice (depend on fetch data)
+    //   Tier 2 (parallel): synthesizeVibe + discoverBrandKit + LoadLogo
+    //                      (vibe needs Tier 1; the other two are independent)
+    //   Tier 3: assemble kit, cache, update D1
     // -----------------------------------------------------------------------
-    await step.do(
-      "parse-and-analyze",
-      { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "90 seconds" },
+    const finalResult = await step.do(
+      "process-and-score",
+      { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "120 seconds" },
       async () => {
         const timer = startTimer();
-        await this.reportProgress(jobId, "parse-assets", "running", 20);
-        await this.reportProgress(jobId, "analyze-voice", "running", 20);
+        await this.reportProgress(jobId, "process-and-score", "running", 20);
 
         try {
-          // Load fetch result from KV (once, shared by both tasks)
+          // ---- Load fetch data ----
           const fetchData = await this.env.CACHE.get(`${kvKey}:fetch`, "json") as Record<string, unknown> | null;
           if (!fetchData) throw new Error("Fetch result not found in KV");
 
-          // --- Task A: Parse visual identity ---
-          const parseVisualTask = async () => {
-            const adapted = this.adaptFetchDataForVisual(fetchData, url, domain);
-
-            const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
-            const result = await parseVisualIdentity(adapted, this.env, domain);
-
-            await this.env.CACHE.put(`${kvKey}:visual`, JSON.stringify(result), {
-              expirationTtl: 3600,
-            });
-
-            await this.reportProgress(jobId, "parse-assets", "complete", 40);
+          // Build the LLM provider config once and pass it to every extractor
+          // that needs LLM access. The router in lib/ai.ts decides between
+          // OpenRouter and Andromeda based on env.LLM_PROVIDER.
+          const llmConfig = {
+            openRouterApiKey: this.env.OPENROUTER_API_KEY,
+            andromedaApiKey: this.env.ANDROMEDA_LLM_API_KEY,
+            provider: this.env.LLM_PROVIDER,
           };
 
-          // --- Task B: Analyze voice ---
-          const analyzeVoiceTask = async () => {
-            const fd = fetchData as Record<string, unknown>;
-            const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
-            const result = await analyzeVoice(
+          // ---- Tier 1: parseVisual + analyzeVoice (parallel) ----
+          const fd = fetchData as Record<string, unknown>;
+          const { parseVisualIdentity } = await import("../lib/extractor/parse-visual");
+          const { analyzeVoice } = await import("../lib/extractor/analyze-voice");
+
+          const adapted = this.adaptFetchDataForVisual(fetchData, url, domain);
+
+          const [visualData, voiceData] = await Promise.all([
+            parseVisualIdentity(adapted, this.env, domain),
+            analyzeVoice(
               {
                 headings: (fd.headings as Array<{ tag: string; text: string }>) || [],
                 heroText: (fd.heroText as string[]) || [],
@@ -120,98 +125,16 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
                 brandName: (fd.brandName as string) || null,
                 description: (fd.description as string) || null,
               },
-              this.env.OPENROUTER_API_KEY
-            );
+              llmConfig
+            ),
+          ]);
+          await this.reportProgress(jobId, "process-and-score", "running", 50);
 
-            await this.env.CACHE.put(`${kvKey}:voice`, JSON.stringify(result), {
-              expirationTtl: 3600,
-            });
-
-            await this.reportProgress(jobId, "analyze-voice", "complete", 60);
-          };
-
-          // Run both in parallel
-          await Promise.all([parseVisualTask(), analyzeVoiceTask()]);
-
-          log({ level: "info", event: "step.complete", jobId, domain, step: "parse-and-analyze", durationMs: timer.elapsed() });
-          return { stored: true };
-        } catch (err) {
-          log({ level: "error", event: "step.failed", jobId, domain, step: "parse-and-analyze", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
-          throw err;
-        }
-      }
-    );
-
-    // -----------------------------------------------------------------------
-    // Step 4: Synthesize vibe + discover brand kit
-    // -----------------------------------------------------------------------
-    await step.do(
-      "synthesize-vibe",
-      { retries: { limit: 2, delay: "5 seconds", backoff: "linear" }, timeout: "60 seconds" },
-      async () => {
-        const timer = startTimer();
-        await this.reportProgress(jobId, "synthesize-vibe", "running", 60);
-
-        try {
-          const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
-          const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
-          if (!visualData || !voiceData) throw new Error("Prior step data not found in KV");
-
+          // ---- Tier 2: synthesizeVibe + discoverBrandKit + LoadLogo (parallel) ----
           const { synthesizeVibe } = await import("../lib/extractor/synthesize-vibe");
           const { discoverBrandKit } = await import("../lib/extractor/discover-brand-kit");
 
-          const [vibeOutput, brandKitOutput] = await Promise.all([
-            synthesizeVibe(
-              {
-                identity: visualData.identity,
-                colors: visualData.colors,
-                typography: visualData.typography,
-                voice: voiceData.voice,
-                buttons: visualData.buttons,
-                effects: visualData.effects,
-                spacing: visualData.spacing,
-                domain,
-                url,
-              },
-              this.env.OPENROUTER_API_KEY
-            ),
-            discoverBrandKit(domain, this.env.OPENROUTER_API_KEY, this.env.SERPER_API_KEY),
-          ]);
-
-          await this.env.CACHE.put(`${kvKey}:vibe`, JSON.stringify({ vibe: vibeOutput, brandKit: brandKitOutput }), {
-            expirationTtl: 3600,
-          });
-
-          await this.reportProgress(jobId, "synthesize-vibe", "complete", 80);
-          log({ level: "info", event: "step.complete", jobId, domain, step: "synthesize-vibe", durationMs: timer.elapsed() });
-          return { stored: true };
-        } catch (err) {
-          log({ level: "error", event: "step.failed", jobId, domain, step: "synthesize-vibe", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
-          throw err;
-        }
-      }
-    );
-
-    // -----------------------------------------------------------------------
-    // Step 5: Assemble final result
-    // -----------------------------------------------------------------------
-    const finalResult = await step.do(
-      "score-package",
-      { timeout: "15 seconds" },
-      async () => {
-        const timer = startTimer();
-        await this.reportProgress(jobId, "score-package", "running", 80);
-
-        try {
-          const visualData = await this.env.CACHE.get(`${kvKey}:visual`, "json") as ParseVisualOutput | null;
-          const voiceData = await this.env.CACHE.get(`${kvKey}:voice`, "json") as VoiceAnalysisOutput | null;
-          const vibeData = await this.env.CACHE.get(`${kvKey}:vibe`, "json") as {
-            vibe: VibeSynthesisOutput;
-            brandKit: BrandKitDiscoveryOutput;
-          } | null;
-
-          // Fetch enrichment data (LoadLogo: clean logo + brand name)
-          const loadLogoData = await (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
+          const loadLogoFetch = (async (): Promise<{ logo?: string; favicon?: string; name?: string } | null> => {
             try {
               const llRes = await fetch(`https://api.loadlogo.com/describe/${domain}`, {
                 headers: { "Accept": "application/json" },
@@ -226,6 +149,30 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
               };
             } catch { return null; }
           })();
+
+          const [vibeOutput, brandKitOutput, loadLogoData] = await Promise.all([
+            synthesizeVibe(
+              {
+                identity: visualData.identity,
+                colors: visualData.colors,
+                typography: visualData.typography,
+                voice: voiceData.voice,
+                buttons: visualData.buttons,
+                effects: visualData.effects,
+                spacing: visualData.spacing,
+                domain,
+                url,
+              },
+              llmConfig
+            ),
+            discoverBrandKit(domain, llmConfig, this.env.SERPER_API_KEY),
+            loadLogoFetch,
+          ]);
+          await this.reportProgress(jobId, "process-and-score", "running", 85);
+
+          // Wrap in shapes the assembly block expects (was historically nested
+          // under a `vibeData` envelope when steps were separate).
+          const vibeData = { vibe: vibeOutput, brandKit: brandKitOutput };
 
           const kit = createEmptyBrandKit(url);
           kit.meta.durationMs = Date.now() - startTime;
@@ -259,13 +206,46 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
               ...(kit.logos || []),
             ];
           }
-          // Use LoadLogo name if better than what we extracted
-          // Prefer short, clean names over long page titles with separators
+          // Use LoadLogo name if better than what we extracted.
+          // Prefer LoadLogo's canonical name when:
+          //   - we extracted nothing
+          //   - extracted contains separators or is overly long (page title)
+          //   - extracted starts with the LoadLogo name and adds boilerplate
+          //     suffix words like "Pricing", "About", "Plans" (subpage fallback case)
           if (loadLogoData?.name) {
             const current = kit.identity?.brandName || "";
-            const isTitleLike = current.includes("|") || current.includes("\u2014") || current.includes(" - ") || current.length > 60;
-            if (!current || isTitleLike) {
-              kit.identity = { ...kit.identity, brandName: loadLogoData.name };
+            const ll = loadLogoData.name;
+            const isTitleLike =
+              current.includes("|") ||
+              current.includes("\u2014") ||
+              current.includes(" - ") ||
+              current.length > 60;
+            const startsWithLoadLogo =
+              ll.length > 0 &&
+              current.toLowerCase().startsWith(ll.toLowerCase()) &&
+              current.length > ll.length;
+            if (!current || isTitleLike || startsWithLoadLogo) {
+              kit.identity = { ...kit.identity, brandName: ll };
+            }
+          }
+
+          // Fallback: when LoadLogo is unavailable AND the extracted
+          // brandName looks like a page title that starts with the domain
+          // root (e.g. "Ramp Pricing and Plans" on ramp.com), strip to
+          // just the domain root capitalized. Without this, sites whose
+          // homepage redirects extractions onto a /pricing-style fallback
+          // page end up with a junky brandName.
+          if (!loadLogoData?.name) {
+            const current = kit.identity?.brandName || "";
+            const root = domain.split(".")[0];
+            const rootCapitalized = root.charAt(0).toUpperCase() + root.slice(1).toLowerCase();
+            if (
+              current &&
+              current.toLowerCase().startsWith(root.toLowerCase()) &&
+              current.length > rootCapitalized.length &&
+              /^[A-Z][a-z]+ /.test(current)
+            ) {
+              kit.identity = { ...kit.identity, brandName: rootCapitalized };
             }
           }
 
@@ -324,52 +304,14 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           const passedQualityGate = qualityScore >= QUALITY_THRESHOLD;
           const cacheTtl = 60 * 60 * 24 * 30;
 
-          // Generate DESIGN.md alongside the JSON kit. Only run on extractions
-          // that pass the quality gate — generating one for an empty kit would
-          // produce a file with placeholder data that's worse than nothing.
-          let designMdLintStatus: "ok" | "warnings" | "errors" | "skipped" = "skipped";
-          let designMdLintErrorCount = 0;
-          let designMdLintWarningCount = 0;
-          if (passedQualityGate) {
-            try {
-              const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
-              const dm = await generateDesignMd(kit, {
-                openRouterApiKey: this.env.OPENROUTER_API_KEY,
-                useLlm: true,
-              });
-              designMdLintErrorCount = dm.lintResult.errors.length;
-              designMdLintWarningCount = dm.lintResult.warnings.length;
-              designMdLintStatus = designMdLintErrorCount > 0 ? "errors"
-                : designMdLintWarningCount > 0 ? "warnings"
-                : "ok";
-
-              await this.env.CACHE.put(`design-md:${jobId}`, dm.content, { expirationTtl: cacheTtl });
-              await this.env.CACHE.put(`design-md:${domain}`, dm.content, { expirationTtl: cacheTtl });
-
-              log({
-                level: "info",
-                event: "design-md.generated",
-                jobId,
-                domain,
-                meta: {
-                  bytes: dm.content.length,
-                  lintStatus: designMdLintStatus,
-                  errorCount: designMdLintErrorCount,
-                  warningCount: designMdLintWarningCount,
-                  proseDegraded: dm.proseDegraded,
-                },
-              });
-            } catch (err) {
-              log({
-                level: "error",
-                event: "design-md.failed",
-                jobId,
-                domain,
-                error: err instanceof Error ? err.message : String(err),
-              });
-              // Non-fatal — main JSON kit still ships.
-            }
-          }
+          // ITER-4 EXPERIMENT: Skip DESIGN.md generation entirely.
+          // Measuring whether removing this call drops score-package step
+          // duration. If yes, we know inline LLM generation was the cost
+          // and will design an async path. If no, design-md isn't the
+          // bottleneck and we move on.
+          const designMdLintStatus: "ok" | "warnings" | "errors" | "skipped" = "skipped";
+          const designMdLintErrorCount = 0;
+          const designMdLintWarningCount = 0;
 
           // Always cache the result by jobId so the user can inspect what we got,
           // even if quality is poor. Only populate the public-facing brand:{domain}
@@ -413,17 +355,14 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             ).run();
           } catch { /* non-fatal */ }
 
-          // Clean up intermediate KV keys
-          await Promise.allSettled([
-            this.env.CACHE.delete(`${kvKey}:fetch`),
-            this.env.CACHE.delete(`${kvKey}:visual`),
-            this.env.CACHE.delete(`${kvKey}:voice`),
-            this.env.CACHE.delete(`${kvKey}:vibe`),
-          ]);
+          // Clean up the only intermediate KV key still written (fetch result).
+          // The combined process-and-score step keeps everything else in
+          // memory between tiers, so no other intermediates exist.
+          await this.env.CACHE.delete(`${kvKey}:fetch`).catch(() => {});
 
           await this.reportProgress(
             jobId,
-            "score-package",
+            "process-and-score",
             passedQualityGate ? "complete" : "failed",
             100,
             errorMessage || undefined
@@ -440,7 +379,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
             fontsFound: kit.typography?.families?.length || 0,
           };
 
-          log({ level: "info", event: "step.complete", jobId, domain, step: "score-package", durationMs: timer.elapsed() });
+          log({ level: "info", event: "step.complete", jobId, domain, step: "process-and-score", durationMs: timer.elapsed() });
           log({
             level: "info",
             event: "extraction.quality",
@@ -464,7 +403,7 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           // Return a small summary (not the full kit — avoid step output limit)
           return finalSummary;
         } catch (err) {
-          log({ level: "error", event: "step.failed", jobId, domain, step: "score-package", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
+          log({ level: "error", event: "step.failed", jobId, domain, step: "process-and-score", error: err instanceof Error ? err.message : String(err), durationMs: timer.elapsed() });
           throw err;
         }
       }

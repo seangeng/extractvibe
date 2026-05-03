@@ -92,6 +92,7 @@ apiRouter.get("/openapi.json", async (c) => {
       "/api/brand/{domain}": { get: { summary: "Get cached brand kit by domain", responses: { "200": { description: "Brand kit" }, "404": { description: "Not found" } } } },
       "/api/brand/{domain}/design.md": { get: { summary: "Public DESIGN.md for the domain", description: "Returns a DESIGN.md file (text/markdown) conforming to the Google DESIGN.md spec. Drop into any project root for AI agents to consume. Edge-cached 1h.", responses: { "200": { description: "DESIGN.md content", content: { "text/markdown": {} } }, "404": { description: "Not extracted yet" } } } },
       "/api/brand/{domain}/design.md/lint": { get: { summary: "Lint report for a domain's DESIGN.md", responses: { "200": { description: "JSON lint findings (errors + warnings)" } } } },
+      "/api/assets/{key}": { get: { summary: "Read a public extracted brand asset", responses: { "200": { description: "Asset bytes" }, "404": { description: "Asset not found" } } } },
       "/api/extract/history": { get: { summary: "List extraction history", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Extraction list" } } } },
       "/api/credits": { get: { summary: "Get credit balance", security: [{ cookieAuth: [] }, { apiKeyAuth: [] }], responses: { "200": { description: "Credits" } } } },
       "/api/keys": { get: { summary: "List API keys", security: [{ cookieAuth: [] }], responses: { "200": { description: "Key list" } } }, post: { summary: "Create API key", security: [{ cookieAuth: [] }], responses: { "201": { description: "Key created" } } } },
@@ -127,6 +128,7 @@ apiRouter.get("/", (c) => {
       brand: "GET /api/brand/:domain",
       brandDesignMd: "GET /api/brand/:domain/design.md",
       brandDesignMdLint: "GET /api/brand/:domain/design.md/lint",
+      asset: "GET /api/assets/brands/:domain/:key",
       history: "GET /api/extract/history",
       credits: "GET /api/credits",
       keys: "GET /api/keys",
@@ -140,6 +142,39 @@ apiRouter.get("/", (c) => {
 // ---------------------------------------------------------------------------
 apiRouter.get("/health", (c) => {
   return c.json({ ok: true, version: "0.1.0" });
+});
+
+// ---------------------------------------------------------------------------
+// Public extracted assets — serves copied logos/screenshots from R2.
+// Only the brands/ prefix is exposed; there is no listing endpoint.
+// ---------------------------------------------------------------------------
+apiRouter.get("/assets/*", async (c) => {
+  const url = new URL(c.req.url);
+  const encodedKey = url.pathname.replace(/^\/api\/assets\/?/, "");
+  let key: string;
+
+  try {
+    key = encodedKey.split("/").map(decodeURIComponent).join("/").replace(/^\/+/, "");
+  } catch {
+    return c.json({ error: "Invalid asset key" }, 400);
+  }
+
+  if (!key.startsWith("brands/")) {
+    return c.json({ error: "Asset not found" }, 404);
+  }
+
+  const object = await c.env.R2_BUCKET.get(key);
+  if (!object) {
+    return c.json({ error: "Asset not found" }, 404);
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("ETag", object.httpEtag);
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Access-Control-Allow-Origin", "*");
+
+  return new Response(object.body, { headers });
 });
 
 // ---------------------------------------------------------------------------
@@ -429,7 +464,11 @@ apiRouter.get("/brand/:domain/design.md", async (c) => {
     }
     const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
     const dm = await generateDesignMd(cachedKit, {
-      openRouterApiKey: c.env.OPENROUTER_API_KEY,
+      llmConfig: {
+        openRouterApiKey: c.env.OPENROUTER_API_KEY,
+        andromedaApiKey: c.env.ANDROMEDA_LLM_API_KEY,
+        provider: c.env.LLM_PROVIDER,
+      },
     });
     content = dm.content;
     await c.env.CACHE.put(`design-md:${domain}`, content, { expirationTtl: 60 * 60 * 72 });
@@ -500,7 +539,11 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
       // that pre-date the design.md feature.
       const { generateDesignMd } = await import("../lib/extractor/generate-design-md");
       const dm = await generateDesignMd(kit, {
-        openRouterApiKey: c.env.OPENROUTER_API_KEY,
+        llmConfig: {
+          openRouterApiKey: c.env.OPENROUTER_API_KEY,
+          andromedaApiKey: c.env.ANDROMEDA_LLM_API_KEY,
+          provider: c.env.LLM_PROVIDER,
+        },
       });
       await c.env.CACHE.put(`design-md:${jobId}`, dm.content, { expirationTtl: 60 * 60 * 72 });
       return new Response(dm.content, {
@@ -738,4 +781,3 @@ async function deductCredit(env: Env, userId: string): Promise<boolean> {
   ).bind(userId).run();
   return (result.meta.changes ?? 0) > 0;
 }
-

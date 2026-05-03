@@ -13,7 +13,7 @@
  * vibe.summary.
  */
 
-import { openRouterCompletion } from "../ai";
+import { aiCompletion, type LlmConfig } from "../ai";
 import { log } from "../logger";
 import { lintDesignMd, type LintResult } from "../design-md-lint";
 import type {
@@ -25,9 +25,9 @@ import type {
 } from "../../schema/v1";
 
 export interface GenerateDesignMdOptions {
-  /** OpenRouter API key — when omitted, prose falls back to deterministic copy. */
-  openRouterApiKey?: string;
-  /** Whether to actually call the LLM. Default true if key present. */
+  /** Provider config — when omitted, prose falls back to deterministic copy. */
+  llmConfig?: LlmConfig;
+  /** Whether to actually call the LLM. Default true if config present. */
   useLlm?: boolean;
 }
 
@@ -46,15 +46,15 @@ export async function generateDesignMd(
   kit: ExtractVibeBrandKit,
   opts: GenerateDesignMdOptions = {}
 ): Promise<GenerateDesignMdResult> {
-  const useLlm = opts.useLlm !== false && !!opts.openRouterApiKey;
+  const useLlm = opts.useLlm !== false && !!opts.llmConfig;
 
   let prose: ProseOutput;
   let proseDegraded = false;
   let proseDegradationReason: string | undefined;
 
-  if (useLlm && opts.openRouterApiKey) {
+  if (useLlm && opts.llmConfig) {
     try {
-      prose = await generateProseWithLlm(kit, opts.openRouterApiKey);
+      prose = await generateProseWithLlm(kit, opts.llmConfig);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       proseDegraded = true;
@@ -91,7 +91,7 @@ interface ProseOutput {
 
 async function generateProseWithLlm(
   kit: ExtractVibeBrandKit,
-  apiKey: string
+  llmConfig: LlmConfig
 ): Promise<ProseOutput> {
   const brandName = kit.identity?.brandName || kit.meta?.domain || "This brand";
   const fontFamilies = (kit.typography?.families || [])
@@ -127,8 +127,8 @@ Produce exactly three sections, each a separate JSON string field. Return ONLY v
   "typographyRationale": "<1 paragraph (60-100 words) explaining the type system — font choices, hierarchy approach, and what they communicate.>"
 }`;
 
-  const raw = await openRouterCompletion(
-    apiKey,
+  const raw = await aiCompletion(
+    llmConfig,
     [{ role: "user", content: prompt }],
     {
       model: "google/gemini-2.5-flash",

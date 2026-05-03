@@ -23,7 +23,13 @@ export interface Env {
 
   // Optional integrations
   SERPER_API_KEY?: string;
+  /** Sean's Andromeda LLM gateway key. When set, can route LLM calls
+   * through Andromeda instead of OpenRouter — see LLM_PROVIDER. */
+  ANDROMEDA_LLM_API_KEY?: string;
 
   // Vars (set in wrangler.jsonc)
   ADMIN_USER_IDS: string;
+  /** "openrouter" (default), "andromeda", or "auto" (Andromeda first,
+   * OpenRouter fallback on error). When unset behaves as "openrouter". */
+  LLM_PROVIDER?: string;
 }

@@ -7,7 +7,7 @@
  * frequency) and LLM-based analysis for subjective qualities.
  */
 
-import { openRouterCompletion } from "../ai";
+import { aiCompletion, type LlmConfig } from "../ai";
 import { log } from "../logger";
 import {
   extractJsonFromResponse,
@@ -183,7 +183,7 @@ Guidelines:
 
 export async function analyzeVoice(
   input: VoiceAnalysisInput,
-  openRouterApiKey: string
+  llmConfig: LlmConfig
 ): Promise<VoiceAnalysisOutput> {
   // ── Deterministic analysis (no LLM needed) ──
   const allText = [
@@ -211,8 +211,8 @@ export async function analyzeVoice(
   let degradationReason: string | undefined;
 
   try {
-    const raw = await openRouterCompletion(
-      openRouterApiKey,
+    const raw = await aiCompletion(
+      llmConfig,
       [{ role: "user", content: prompt }],
       {
         model: "google/gemini-2.5-flash",

@@ -50,12 +50,15 @@ export interface FetchRenderOutput {
     context: string;
     width?: number;
     height?: number;
+    score?: number;
   }>;
   inlineSvgs: Array<{
     svg: string;
     context: string;
     width?: number;
     height?: number;
+    purpose?: string;
+    score?: number;
   }>;
 
   // Assets
@@ -116,12 +119,15 @@ interface DomExtractionResult {
     context: string;
     width?: number;
     height?: number;
+    score?: number;
   }>;
   inlineSvgs: Array<{
     svg: string;
     context: string;
     width?: number;
     height?: number;
+    purpose?: string;
+    score?: number;
   }>;
 
   ogImage: string | null;
@@ -175,6 +181,111 @@ function extractDom(): DomExtractionResult {
     if (el.closest("header")) return "header";
     if (el.closest("footer")) return "footer";
     return "body";
+  }
+
+  function elementTextTokens(el: Element): string {
+    const parts: string[] = [];
+    let current: Element | null = el;
+    let depth = 0;
+    while (current && depth < 4) {
+      for (const name of ["id", "class", "aria-label", "title", "alt", "src", "href"]) {
+        const value = current.getAttribute(name);
+        if (value) parts.push(value);
+      }
+      current = current.parentElement;
+      depth++;
+    }
+    const anchor = el.closest("a");
+    if (anchor) parts.push(text(anchor).slice(0, 80));
+    return parts.join(" ").toLowerCase();
+  }
+
+  function elementOwnTokens(el: Element): string {
+    const parts: string[] = [];
+    for (const name of ["id", "class", "aria-label", "title", "alt", "src", "href"]) {
+      const value = el.getAttribute(name);
+      if (value) parts.push(value);
+    }
+
+    const parent = el.parentElement;
+    if (parent) {
+      for (const name of ["id", "class", "aria-label", "title"]) {
+        const value = parent.getAttribute(name);
+        if (value) parts.push(value);
+      }
+    }
+
+    const anchor = el.closest("a");
+    if (anchor) {
+      for (const name of ["id", "class", "aria-label", "title", "href"]) {
+        const value = anchor.getAttribute(name);
+        if (value) parts.push(value);
+      }
+      parts.push(text(anchor).slice(0, 80));
+    }
+
+    return parts.join(" ").toLowerCase();
+  }
+
+  function hasLogoToken(el: Element): boolean {
+    return /(^|[\s/_-])(logo|brandlogo|brand-logo|brandmark|brand-mark|brand_logo|site-logo|site_logo|wordmark|logomark|identity)([\s/_-]|$)/i.test(elementOwnTokens(el));
+  }
+
+  function hasHomeBrandToken(el: Element): boolean {
+    return isHomeAnchor(el) && /(^|[\s/_-])brand([\s/_-]|$)/i.test(elementOwnTokens(el));
+  }
+
+  function isUtilitySvg(el: Element): boolean {
+    const tokens = elementOwnTokens(el);
+    return /\b(lucide|heroicon|tabler|phosphor|radix|arrow|chevron|menu|search|close|external|download|upload|copy|github|twitter|x-icon)\b/i.test(tokens);
+  }
+
+  function isHomeAnchor(el: Element): boolean {
+    const anchor = el.closest("a[href]") as HTMLAnchorElement | null;
+    if (!anchor) return false;
+    const raw = anchor.getAttribute("href") ?? "";
+    if (raw === "/" || raw === "./" || raw === "") return true;
+    try {
+      const href = new URL(raw, window.location.href);
+      return href.origin === window.location.origin && (href.pathname === "/" || href.pathname === "");
+    } catch {
+      return false;
+    }
+  }
+
+  function isFirstHeaderNavLink(el: Element): boolean {
+    const container = el.closest("header, nav");
+    const anchor = el.closest("a[href]");
+    const firstAnchor = container?.querySelector("a[href]");
+    return Boolean(anchor && firstAnchor && anchor === firstAnchor);
+  }
+
+  function logoCandidateScore(el: Element, width?: number, height?: number): number {
+    let score = 0;
+    const context = closestContext(el);
+    const tokens = elementTextTokens(el);
+
+    if (hasLogoToken(el)) score += 5;
+    if (hasHomeBrandToken(el)) score += 2;
+    if (context === "header" || context === "nav") score += 2;
+    if (context === "footer") score += 1;
+    if (isHomeAnchor(el)) score += 3;
+    if (isFirstHeaderNavLink(el)) score += 2;
+
+    if (width && height) {
+      const area = width * height;
+      const aspect = width / height;
+      if (width < 10 || height < 10 || area < 100) score -= 4;
+      if (width > 520 || height > 260) score -= 2;
+      if (aspect >= 1.15 && aspect <= 8 && width <= 420 && height <= 180) score += 1;
+      if (Math.abs(aspect - 1) < 0.3 && width <= 180 && height <= 180) score += 1;
+    }
+
+    if (/\b(hero|banner|screenshot|avatar|user|profile|tracking|pixel|placeholder)\b/.test(tokens)) {
+      score -= 3;
+    }
+
+    return score;
   }
 
   // ---- Meta tags ----
@@ -362,36 +473,30 @@ function extractDom(): DomExtractionResult {
     context: string;
     width?: number;
     height?: number;
+    score?: number;
   }> = [];
   const seenLogoSrcs = new Set<string>();
 
-  const logoSelectors = [
-    "header img",
-    "nav img",
-    "header a:first-child img",
-    "[class*='logo'] img",
-    "[class*='Logo'] img",
-    "[id*='logo'] img",
-    "[id*='Logo'] img",
-    "a[href='/'] img",
-    "a[href='./'] img",
-  ];
+  Array.from(document.images).slice(0, 160).forEach((img) => {
+    const src = img.currentSrc || img.src || img.getAttribute("src");
+    if (!src || seenLogoSrcs.has(src)) return;
 
-  for (const sel of logoSelectors) {
-    document.querySelectorAll(sel).forEach((img) => {
-      const src = (img as HTMLImageElement).src || img.getAttribute("src");
-      if (!src || seenLogoSrcs.has(src)) return;
-      seenLogoSrcs.add(src);
+    const rect = img.getBoundingClientRect();
+    const width = img.naturalWidth || Math.round(rect.width) || undefined;
+    const height = img.naturalHeight || Math.round(rect.height) || undefined;
+    const score = logoCandidateScore(img, width, height);
+    if (score < 5) return;
 
-      logoImages.push({
-        src,
-        alt: attr(img, "alt"),
-        context: closestContext(img),
-        width: (img as HTMLImageElement).naturalWidth || undefined,
-        height: (img as HTMLImageElement).naturalHeight || undefined,
-      });
+    seenLogoSrcs.add(src);
+    logoImages.push({
+      src,
+      alt: attr(img, "alt"),
+      context: closestContext(img),
+      width,
+      height,
+      score,
     });
-  }
+  });
 
   // ---- Inline SVGs in header / nav ----
 
@@ -400,34 +505,42 @@ function extractDom(): DomExtractionResult {
     context: string;
     width?: number;
     height?: number;
+    purpose?: string;
+    score?: number;
   }> = [];
-
-  const svgContainerSelectors = [
-    "header svg",
-    "nav svg",
-    "[class*='logo'] svg",
-    "[class*='Logo'] svg",
-    "[id*='logo'] svg",
-    "[id*='Logo'] svg",
-  ];
   const seenSvg = new Set<string>();
 
-  for (const sel of svgContainerSelectors) {
-    document.querySelectorAll(sel).forEach((svg) => {
-      const html = (svg as SVGElement).outerHTML;
-      // Skip very large or duplicate SVGs
-      if (!html || html.length > 50_000 || seenSvg.has(html)) return;
-      seenSvg.add(html);
+  Array.from(document.querySelectorAll("svg")).slice(0, 160).forEach((svg) => {
+    const html = (svg as SVGElement).outerHTML;
+    const normalized = html?.replace(/\s+/g, " ").trim();
+    if (!normalized || normalized.length > 50_000 || seenSvg.has(normalized)) return;
 
-      const rect = svg.getBoundingClientRect();
-      inlineSvgs.push({
-        svg: html,
-        context: closestContext(svg),
-        width: rect.width || undefined,
-        height: rect.height || undefined,
-      });
+    const rect = svg.getBoundingClientRect();
+    const width = Math.round(rect.width) || undefined;
+    const height = Math.round(rect.height) || undefined;
+    let score = logoCandidateScore(svg, width, height);
+
+    if (isUtilitySvg(svg) && !hasLogoToken(svg) && !isHomeAnchor(svg)) {
+      score -= 6;
+    }
+    if (svg.getAttribute("aria-hidden") === "true" && !hasLogoToken(svg) && !isHomeAnchor(svg)) {
+      score -= 2;
+    }
+    if (!hasLogoToken(svg) && !isHomeAnchor(svg) && width && height && width <= 32 && height <= 32) {
+      score -= 3;
+    }
+    if (score < 6) return;
+
+    seenSvg.add(normalized);
+    inlineSvgs.push({
+      svg: html,
+      context: closestContext(svg),
+      width,
+      height,
+      purpose: "logo",
+      score,
     });
-  }
+  });
 
   // ---- Design assets (transparent PNGs, SVGs, interesting images) ----
 
@@ -1253,83 +1366,104 @@ export async function fetchAndRender(
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
-    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    // Settle for client-side hydration. 1s is enough for most React/Vue
+    // SPAs to mount; values above that are diminishing returns and were
+    // tuned conservatively before measurement.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
 
     // ------------------------------------------------------------------
-    // Extract DOM content (single evaluate for all DOM-based data)
+    // Run DOM extraction, styles extraction, and screenshot capture in
+    // parallel. The evaluates serialize on the page's V8 thread but the
+    // screenshot uses Chromium's separate rasterizer pipeline, so it
+    // overlaps with the evaluates. Saves 1-2s vs sequential.
     // ------------------------------------------------------------------
 
-    let domResult: DomExtractionResult;
-    try {
-      domResult = await page.evaluate(extractDom);
-    } catch (err) {
-      console.error("DOM extraction failed:", err);
-      domResult = {
-        meta: {},
-        title: "",
-        brandName: null,
-        description: null,
-        headings: [],
-        heroText: [],
-        ctaTexts: [],
-        navLabels: [],
-        footerText: "",
-        bodyText: "",
-        icons: [],
-        logoImages: [],
-        inlineSvgs: [],
-        ogImage: null,
-        stylesheetUrls: [],
-        manifestUrl: null,
-        designAssets: [],
-        iconLibrary: null,
-        darkModeInfo: {
-          hasDarkClass: false,
-          currentTheme: null,
-          colorScheme: "",
-          hasThemeToggle: false,
-          darkStylesheetFound: false,
-          supportsDarkMode: false,
-        },
-        html: "",
-      };
-    }
+    const domEmpty: DomExtractionResult = {
+      meta: {}, title: "", brandName: null, description: null,
+      headings: [], heroText: [], ctaTexts: [], navLabels: [],
+      footerText: "", bodyText: "", icons: [], logoImages: [],
+      inlineSvgs: [], ogImage: null, stylesheetUrls: [], manifestUrl: null,
+      designAssets: [], iconLibrary: null,
+      darkModeInfo: {
+        hasDarkClass: false, currentTheme: null, colorScheme: "",
+        hasThemeToggle: false, darkStylesheetFound: false, supportsDarkMode: false,
+      },
+      html: "",
+    };
+    const stylesEmpty: StylesExtractionResult = {
+      elementStyles: [], cssCustomProperties: {},
+      backgroundImages: [], shadows: [], gradients: [],
+    };
 
-    // ------------------------------------------------------------------
-    // Extract computed styles (separate evaluate — style computation is
-    // independent and isolating it limits blast radius on failure)
-    // ------------------------------------------------------------------
-
-    let stylesResult: StylesExtractionResult;
-    try {
-      stylesResult = await page.evaluate(extractStyles);
-    } catch (err) {
-      console.error("Styles extraction failed:", err);
-      stylesResult = {
-        elementStyles: [],
-        cssCustomProperties: {},
-        backgroundImages: [],
-        shadows: [],
-        gradients: [],
-      };
-    }
-
-    // ------------------------------------------------------------------
-    // Screenshot
-    // ------------------------------------------------------------------
-
-    let screenshot: Uint8Array | null = null;
-    try {
-      const buf = await page.screenshot({ fullPage: true, type: "png" });
-      // The screenshot returns a Buffer (Node-compat) or ArrayBuffer depending
-      // on the runtime. Normalise to Uint8Array for a consistent return type.
-      if (buf instanceof Uint8Array) {
-        screenshot = buf;
-      } else {
-        screenshot = new Uint8Array(buf as ArrayBuffer);
+    const evaluatesPromise = (async () => {
+      let dom: DomExtractionResult;
+      let styles: StylesExtractionResult;
+      try {
+        dom = await page.evaluate(extractDom);
+      } catch (err) {
+        console.error("DOM extraction failed:", err);
+        dom = domEmpty;
       }
-    } catch (err) {
-      console.error("Screenshot failed:", err);
+      try {
+        styles = await page.evaluate(extractStyles);
+      } catch (err) {
+        console.error("Styles extraction failed:", err);
+        styles = stylesEmpty;
+      }
+      return { dom, styles };
+    })();
+
+    const screenshotPromise = (async (): Promise<Uint8Array | null> => {
+      try {
+        const buf = await page.screenshot({ fullPage: false, type: "png" });
+        return buf instanceof Uint8Array ? buf : new Uint8Array(buf as ArrayBuffer);
+      } catch (err) {
+        console.error("Screenshot failed:", err);
+        return null;
+      }
+    })();
+
+    let [{ dom: domResult, styles: stylesResult }, screenshot] = await Promise.all([
+      evaluatesPromise,
+      screenshotPromise,
+    ]);
+
+    // Some sites (e.g. ramp.com homepage) serve a markdown-only "machine"
+    // version at the root and only render full HTML on subpages like
+    // /pricing. Detect that case — no logo images, no inline SVGs, no
+    // icons, no manifest — and retry once on a likely-marketing subpage.
+    // Without this we mark such sites as q=65 with 0 logos despite the
+    // brand having a perfectly normal pricing/marketing page.
+    const noVisualAssets =
+      domResult.logoImages.length === 0 &&
+      domResult.inlineSvgs.length === 0 &&
+      domResult.icons.length === 0;
+    const isRootPath = (() => {
+      try { return new URL(url).pathname === "/" || new URL(url).pathname === ""; }
+      catch { return false; }
+    })();
+    if (noVisualAssets && isRootPath) {
+      const fallbackUrl = url.replace(/\/+$/, "") + "/pricing";
+      try {
+        await page.goto(fallbackUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        const [retryDom, retryStyles, retryShot] = await Promise.all([
+          page.evaluate(extractDom).catch(() => domEmpty),
+          page.evaluate(extractStyles).catch(() => stylesEmpty),
+          page.screenshot({ fullPage: false, type: "png" })
+            .then((b) => (b instanceof Uint8Array ? b : new Uint8Array(b as ArrayBuffer)))
+            .catch(() => null),
+        ]);
+        const retryHasAssets =
+          retryDom.logoImages.length > 0 ||
+          retryDom.inlineSvgs.length > 0 ||
+          retryDom.icons.length > 0;
+        if (retryHasAssets) {
+          domResult = retryDom;
+          stylesResult = retryStyles;
+          if (retryShot) screenshot = retryShot;
+        }
+      } catch { /* fallback non-fatal — keep original empty result */ }
     }
 
     // ------------------------------------------------------------------

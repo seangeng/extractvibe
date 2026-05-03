@@ -23,3 +23,12 @@ wrangler.jsonc
 SEAN_GENERAL_SAAS_CLAUDE.md
 OAUTH_SETUP.md
 PRD.md
+
+# Benchmarking — keep harness + reports, skip per-run raw artifacts
+bench/*/kits/
+bench/*/summary.json
+bench/.bench-key
+bench/.*-stdout.log
+bench/.tail-*.log
+tsconfig.tsbuildinfo
+

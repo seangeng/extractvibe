@@ -16,7 +16,7 @@
  * official brand rules and guidelines.
  */
 
-import { openRouterCompletion } from "../ai";
+import { aiCompletion, type LlmConfig } from "../ai";
 import { extractJsonFromResponse } from "../llm-utils";
 import { serperSearch } from "../serper";
 
@@ -316,12 +316,12 @@ Guidelines:
 async function extractGuidelines(
   pageContent: string,
   pageUrl: string,
-  openRouterApiKey: string
+  llmConfig: LlmConfig
 ): Promise<{ isActualBrandKit: boolean; guidelineRules: string[] }> {
   try {
     const prompt = buildGuidelinePrompt(pageContent, pageUrl);
-    const raw = await openRouterCompletion(
-      openRouterApiKey,
+    const raw = await aiCompletion(
+      llmConfig,
       [{ role: "user", content: prompt }],
       {
         model: "google/gemini-2.5-flash",
@@ -357,7 +357,7 @@ async function extractGuidelines(
 
 export async function discoverBrandKit(
   domain: string,
-  openRouterApiKey: string,
+  llmConfig: LlmConfig,
   serperApiKey?: string
 ): Promise<BrandKitDiscoveryOutput> {
   // ── Strategy 1: Enhanced URL probing (free, always first) ──
@@ -368,7 +368,7 @@ export async function discoverBrandKit(
       const { isActualBrandKit, guidelineRules } = await extractGuidelines(
         probeResult.content,
         probeResult.url,
-        openRouterApiKey
+        llmConfig
       );
 
       if (isActualBrandKit) {
@@ -400,7 +400,7 @@ export async function discoverBrandKit(
         const { isActualBrandKit, guidelineRules } = await extractGuidelines(
           searchResult.content,
           searchResult.url,
-          openRouterApiKey
+          llmConfig
         );
 
         if (isActualBrandKit) {
