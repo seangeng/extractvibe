@@ -49,7 +49,7 @@ const footerColumns: Array<{
       { label: "Personality Traits", href: "/features/voice" },
       { label: "Copywriting Patterns", href: "/features/voice" },
       { label: "Workers AI", href: "/ai" },
-      { label: "OpenRouter Models", href: "/ai" },
+      { label: "B3IQ Models", href: "/ai" },
     ],
   },
   {

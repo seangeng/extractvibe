@@ -82,7 +82,7 @@ export default function AboutPage() {
               <p className="mt-4 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
                 Built entirely on Cloudflare's developer platform, ExtractVibe
                 runs at the edge with minimal latency. The dual-AI architecture
-                (Workers AI + OpenRouter) keeps costs near zero while delivering
+                (Workers AI + B3IQ) keeps costs near zero while delivering
                 high-quality brand analysis. Everything is API-first with
                 structured JSON output.
               </p>

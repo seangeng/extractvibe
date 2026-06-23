@@ -466,7 +466,7 @@ apiRouter.get("/brand/:domain/design.md", async (c) => {
     const dm = await generateDesignMd(cachedKit, {
       llmConfig: {
         openRouterApiKey: c.env.OPENROUTER_API_KEY,
-        andromedaApiKey: c.env.ANDROMEDA_LLM_API_KEY,
+        b3iqApiKey: c.env.B3IQ_API_KEY,
         provider: c.env.LLM_PROVIDER,
       },
     });
@@ -541,7 +541,7 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
       const dm = await generateDesignMd(kit, {
         llmConfig: {
           openRouterApiKey: c.env.OPENROUTER_API_KEY,
-          andromedaApiKey: c.env.ANDROMEDA_LLM_API_KEY,
+          b3iqApiKey: c.env.B3IQ_API_KEY,
           provider: c.env.LLM_PROVIDER,
         },
       });

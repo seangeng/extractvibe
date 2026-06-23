@@ -2,9 +2,9 @@
  * AI client wrappers for LLM completions.
  *
  * Routes between providers via LlmConfig.provider:
- *   - "openrouter" (default): OpenRouter (cheap, many models)
- *   - "andromeda":            Sean's hosted Andromeda LLM gateway
- *   - "auto":                 Andromeda first, OpenRouter on failure
+ *   - "b3iq" (default): the B3IQ network (OpenAI-compatible gateway)
+ *   - "openrouter":     OpenRouter (dormant fallback; needs OPENROUTER_API_KEY)
+ *   - "auto":           B3IQ first, OpenRouter on failure
  *
  * Cloudflare Workers AI REST API kept as a separate utility (not routed).
  */
@@ -21,56 +21,51 @@ interface CompletionOptions {
   /** Request timeout in ms. Default 45s. CF Workflow step timeouts have
    * proven not to enforce in practice — this is the user-space fallback. */
   timeoutMs?: number;
-  /** Andromeda routing hint when provider=andromeda. Ignored otherwise. */
-  andromedaRoute?: "speed" | "quality" | "long-context";
 }
 
 export interface LlmConfig {
-  openRouterApiKey: string;
-  andromedaApiKey?: string;
-  /** "openrouter" | "andromeda" | "auto" — defaults to "openrouter". */
+  /** B3IQ gateway key (gateway:chat scope). Primary provider. */
+  b3iqApiKey?: string;
+  /** OpenRouter key — only needed when provider is "openrouter" or "auto". */
+  openRouterApiKey?: string;
+  /** "b3iq" | "openrouter" | "auto" — defaults to "b3iq". */
   provider?: string;
 }
 
 /**
- * Provider-agnostic completion. Picks Andromeda or OpenRouter based on
- * config.provider; "auto" tries Andromeda first and falls through on error.
+ * Provider-agnostic completion. Picks B3IQ or OpenRouter based on
+ * config.provider; "auto" tries B3IQ first and falls through on error.
  *
- * Per-call `model` is OpenRouter's namespaced ID (e.g. "google/gemini-2.5-flash").
- * When routed to Andromeda, the OpenRouter model is ignored and we use Andromeda's
- * default Qwen unless an explicit Andromeda model name was passed in via options.
+ * Per-call `model` is OpenRouter's namespaced id (e.g. "google/gemini-2.5-flash")
+ * for the OpenRouter path. On the B3IQ path it is ignored unless a B3IQ-native
+ * model name (qwen.../gemma...) was passed, in which case it is forwarded as-is.
  */
 export async function aiCompletion(
   config: LlmConfig,
   messages: CompletionMessage[],
   options: CompletionOptions = {}
 ): Promise<string> {
-  const provider = (config.provider || "openrouter").toLowerCase();
-  const hasAndromeda = !!config.andromedaApiKey;
-  const isAndromedaModel = options.model && /^(qwen|gemma|auto)/.test(options.model);
+  const provider = (config.provider || "b3iq").toLowerCase();
+  const hasB3iq = !!config.b3iqApiKey;
+  const hasOpenRouter = !!config.openRouterApiKey;
+  const b3iqModel = options.model && /^(qwen|gemma)/i.test(options.model) ? options.model : undefined;
 
-  if (provider === "andromeda" && hasAndromeda) {
-    return andromedaCompletion(config.andromedaApiKey!, messages, {
-      ...options,
-      model: isAndromedaModel ? options.model : undefined,
-    });
-  }
-
-  if (provider === "auto" && hasAndromeda) {
+  if ((provider === "b3iq" || provider === "auto") && hasB3iq) {
     try {
-      return await andromedaCompletion(config.andromedaApiKey!, messages, {
-        ...options,
-        model: isAndromedaModel ? options.model : undefined,
-      });
+      return await b3iqCompletion(config.b3iqApiKey!, messages, { ...options, model: b3iqModel });
     } catch (err) {
-      // Fall through to OpenRouter
+      // Only "auto" falls through to OpenRouter; "b3iq" surfaces the error.
+      if (provider !== "auto" || !hasOpenRouter) throw err;
       console.warn(
-        `[ai.aiCompletion] Andromeda failed, falling back to OpenRouter: ${err instanceof Error ? err.message : String(err)}`
+        `[ai.aiCompletion] B3IQ failed, falling back to OpenRouter: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
 
-  return openRouterCompletion(config.openRouterApiKey, messages, options);
+  if (!hasOpenRouter) {
+    throw new Error("No LLM provider configured: set B3IQ_API_KEY (provider=b3iq) or OPENROUTER_API_KEY.");
+  }
+  return openRouterCompletion(config.openRouterApiKey!, messages, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,81 +128,73 @@ export async function openRouterCompletion(
 }
 
 // ---------------------------------------------------------------------------
-// Andromeda LLM (Sean's hosted gateway — Qwen + Gemma)
+// B3IQ network (OpenAI-compatible gateway — Qwen + Gemma across enrolled nodes)
 // ---------------------------------------------------------------------------
 
-const ANDROMEDA_ENDPOINT = "https://andromeda-llm.lemoolah.com/v1/chat/completions";
-const DEFAULT_ANDROMEDA_MODEL = "qwen3.6-35b-a3b";
+const B3IQ_ENDPOINT = "https://control-plane.b3iq.org/v1/chat/completions";
+// Multi-node "Andromeda" Qwen3.6 35B route: the most reliable + capable chat
+// model on the network. See https://control-plane.b3iq.org/v1/models for the
+// live list; any served model id works.
+const DEFAULT_B3IQ_MODEL = "qwen3.6-35b-a3b";
+
+// Strip a <think>…</think> reasoning preamble (reasoning models emit one) so
+// callers that parse the content as JSON aren't tripped up. No-op on clean output.
+function stripReasoning(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trimStart();
+}
 
 /**
- * Call the Andromeda LLM gateway. OpenAI-compatible chat completions API.
- * Defaults to Qwen on the speed route — best for product UX where we want
- * sub-second-ish first-token latency on small JSON outputs.
+ * Call the B3IQ network's OpenAI-compatible chat completions API. Defaults to the
+ * multi-node Qwen3.6 35B route — best for product UX (fast, reliable). Auth is a
+ * B3IQ gateway key (gateway:chat scope, https://b3iq.org → API keys).
  */
-export async function andromedaCompletion(
+export async function b3iqCompletion(
   apiKey: string,
   messages: CompletionMessage[],
   options: CompletionOptions = {}
 ): Promise<string> {
   const {
-    model = DEFAULT_ANDROMEDA_MODEL,
+    model = DEFAULT_B3IQ_MODEL,
     maxTokens = 2048,
     temperature = 0.2,
     timeoutMs = 45_000,
-    andromedaRoute = "speed",
   } = options;
 
-  const callAndromeda = async (
-    selectedModel: string,
-    selectedRoute: "speed" | "quality" | "long-context",
-    selectedMaxTokens: number,
-  ): Promise<Response> => {
-    return fetch(ANDROMEDA_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        andromeda_route: selectedRoute,
-        max_tokens: selectedMaxTokens,
-        temperature,
-        // Disable Qwen's <think> reasoning preamble for product calls — adds
-        // latency and our extractors only consume final JSON anyway.
-        chat_template_kwargs: { enable_thinking: false },
-        messages,
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  };
-
-  let response = await callAndromeda(model, andromedaRoute, maxTokens);
-
-  // Qwen on the speed route has a 4096-token context budget. When prompt
-  // + requested completion exceeds it the gateway returns 413. Auto-retry
-  // on Gemma's long-context route (32k ctx) so callers don't have to think
-  // about it. Skill section "413 context budget exceeded" describes this.
-  if (response.status === 413 && andromedaRoute === "speed") {
-    response = await callAndromeda("auto", "long-context", maxTokens);
-  }
+  const response = await fetch(B3IQ_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      // Ask Qwen to skip its <think> reasoning preamble — our extractors only
+      // consume final JSON. Honored by the llama.cpp nodes; stripReasoning()
+      // below is the belt-and-suspenders fallback for any model that ignores it.
+      chat_template_kwargs: { enable_thinking: false },
+      messages,
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `Andromeda LLM error (${response.status}): ${errorText.slice(0, 500)}`
+      `B3IQ API error (${response.status}): ${errorText.slice(0, 500)}`
     );
   }
 
   const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string }; text?: string }>;
+    choices?: Array<{ message?: { content?: string; reasoning_content?: string }; text?: string }>;
   };
 
   const content = data.choices?.[0]?.message?.content ?? data.choices?.[0]?.text;
   if (!content) {
-    throw new Error("Andromeda LLM returned an empty response");
+    throw new Error("B3IQ returned an empty response");
   }
-  return content;
+  return stripReasoning(content);
 }
 
 // ---------------------------------------------------------------------------

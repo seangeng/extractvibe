@@ -324,7 +324,7 @@ async function extractGuidelines(
       llmConfig,
       [{ role: "user", content: prompt }],
       {
-        model: "google/gemini-2.5-flash",
+        model: "qwen3.6-35b-a3b",
         temperature: 0.1,
         maxTokens: 2048,
       }

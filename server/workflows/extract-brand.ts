@@ -97,11 +97,12 @@ export class ExtractBrandWorkflow extends WorkflowEntrypoint<
           if (!fetchData) throw new Error("Fetch result not found in KV");
 
           // Build the LLM provider config once and pass it to every extractor
-          // that needs LLM access. The router in lib/ai.ts decides between
-          // OpenRouter and Andromeda based on env.LLM_PROVIDER.
+          // that needs LLM access. The router in lib/ai.ts decides between B3IQ
+          // and OpenRouter based on env.LLM_PROVIDER (defaults to "b3iq").
           const llmConfig = {
+            b3iqApiKey: this.env.B3IQ_API_KEY,
+            // OpenRouter retained only as a dormant fallback (provider "auto"/"openrouter").
             openRouterApiKey: this.env.OPENROUTER_API_KEY,
-            andromedaApiKey: this.env.ANDROMEDA_LLM_API_KEY,
             provider: this.env.LLM_PROVIDER,
           };
 

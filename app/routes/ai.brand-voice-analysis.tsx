@@ -26,7 +26,7 @@ const brandVoiceAiData: SeoPageData = {
   heroTitle: "How AI analyzes",
   heroTitleMuted: "brand voice and personality.",
   heroDescription:
-    "ExtractVibe uses OpenRouter-connected language models to read website copy and classify tone, identify personality traits, and generate actionable writing guidelines. Here is how it works under the hood.",
+    "ExtractVibe uses B3IQ-connected language models to read website copy and classify tone, identify personality traits, and generate actionable writing guidelines. Here is how it works under the hood.",
   features: [
     {
       title: "Text Extraction",
@@ -58,7 +58,7 @@ const brandVoiceAiData: SeoPageData = {
     {
       number: "02",
       title: "AI analyzes patterns",
-      description: "Gemini Flash 2.0 analyzes word choice, sentence structure, emotional tone, and communication patterns.",
+      description: "Qwen3.6 35B analyzes word choice, sentence structure, emotional tone, and communication patterns.",
     },
     {
       number: "03",
@@ -106,7 +106,7 @@ const brandVoiceAiData: SeoPageData = {
   faq: [
     {
       question: "Which AI model powers voice analysis?",
-      answer: "ExtractVibe uses Gemini Flash 2.0 via OpenRouter for voice analysis. This model offers strong language understanding at a low cost per token, making it ideal for analyzing brand copy.",
+      answer: "ExtractVibe uses Qwen3.6 35B via B3IQ for voice analysis. This model offers strong language understanding at a low cost per token, making it ideal for analyzing brand copy.",
     },
     {
       question: "How accurate is the voice analysis?",

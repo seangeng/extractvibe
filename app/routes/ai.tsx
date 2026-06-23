@@ -10,7 +10,7 @@ export function meta() {
     {
       name: "description",
       content:
-        "Learn how ExtractVibe uses a dual-AI architecture with Cloudflare Workers AI and OpenRouter to extract brand identity at speed and quality.",
+        "Learn how ExtractVibe uses a dual-AI architecture with Cloudflare Workers AI and B3IQ to extract brand identity at speed and quality.",
     },
     {
       property: "og:title",
@@ -19,7 +19,7 @@ export function meta() {
     {
       property: "og:description",
       content:
-        "Dual-AI architecture: Workers AI for speed, OpenRouter for depth. See how ExtractVibe's extraction pipeline works.",
+        "Dual-AI architecture: Workers AI for speed, B3IQ for depth. See how ExtractVibe's extraction pipeline works.",
     },
   ];
 }
@@ -41,13 +41,13 @@ const pipelineDiagram = `
      |
      v
 +-------------------+
-| 3. ANALYZE VOICE  |  OpenRouter (Gemini Flash 2.0)
+| 3. ANALYZE VOICE  |  B3IQ (Qwen3.6 35B)
 |   Copy & Content   |  Tone, personality, style
 +-------------------+
      |
      v
 +-------------------+
-| 4. SYNTHESIZE     |  OpenRouter (Gemini Flash 2.0)
+| 4. SYNTHESIZE     |  B3IQ (Qwen3.6 35B)
 |   Brand Profile    |  Combine visual + verbal
 +-------------------+
      |
@@ -79,7 +79,7 @@ export default function AiPage() {
           </h1>
           <p className="mt-6 max-w-xl leading-relaxed text-[hsl(var(--muted-foreground))]">
             ExtractVibe uses two AI systems working together: Cloudflare Workers
-            AI for fast, free bulk analysis, and OpenRouter for deep brand voice
+            AI for fast, free bulk analysis, and B3IQ for deep brand voice
             and personality understanding. The result is near-zero AI cost with
             high-quality output.
           </p>
@@ -108,7 +108,7 @@ export default function AiPage() {
           </h2>
           <p className="mt-4 max-w-2xl leading-relaxed text-[hsl(var(--muted-foreground))]">
             Each AI system handles what it does best. Workers AI runs free models
-            at the edge for structured data extraction. OpenRouter connects to
+            at the edge for structured data extraction. B3IQ connects to
             frontier models for nuanced language analysis.
           </p>
 
@@ -150,7 +150,7 @@ export default function AiPage() {
               </ul>
             </div>
 
-            {/* OpenRouter */}
+            {/* B3IQ */}
             <div className="rounded-2xl border border-[hsl(var(--border))] p-8">
               <div className="flex items-center gap-3">
                 <Brain className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
@@ -159,10 +159,10 @@ export default function AiPage() {
                 </p>
               </div>
               <h3 className="mt-4 text-xl font-semibold">
-                OpenRouter
+                B3IQ
               </h3>
               <p className="mt-3 leading-relaxed text-[hsl(var(--muted-foreground))]">
-                Connects to high-quality models like Gemini Flash 2.0 for tasks
+                Connects to high-quality models like Qwen3.6 35B for tasks
                 requiring nuanced language understanding. Used for brand voice
                 analysis, personality profiling, and vibe synthesis where depth
                 matters more than speed.
@@ -256,7 +256,7 @@ export default function AiPage() {
                 <span className="font-bold">Brand voice analysis</span>
               </h3>
               <p className="mt-4 max-w-md leading-relaxed text-[hsl(var(--muted-foreground))]">
-                OpenRouter sends the extracted text content to Gemini Flash 2.0
+                B3IQ sends the extracted text content to Qwen3.6 35B
                 for deep language analysis. The model classifies tone,
                 identifies personality traits, and generates writing style
                 guidelines.

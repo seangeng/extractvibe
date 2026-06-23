@@ -354,7 +354,7 @@ export const voicePageData: SeoPageData = {
     {
       question: "What AI models power the voice analysis?",
       answer:
-        "Voice analysis uses a combination of Cloudflare Workers AI for initial text processing and OpenRouter-hosted models (like Gemini Flash) for deep tone and personality analysis. This two-stage approach balances speed with analytical depth, ensuring high-quality voice profiles without excessive latency.",
+        "Voice analysis uses a combination of Cloudflare Workers AI for initial text processing and B3IQ-hosted models (like Qwen3.6 35B) for deep tone and personality analysis. This two-stage approach balances speed with analytical depth, ensuring high-quality voice profiles without excessive latency.",
     },
     {
       question: "Can I use the voice profile to generate content?",
