@@ -131,10 +131,10 @@ export async function openRouterCompletion(
 // B3IQ network (OpenAI-compatible gateway — Qwen + Gemma across enrolled nodes)
 // ---------------------------------------------------------------------------
 
-const B3IQ_ENDPOINT = "https://control-plane.b3iq.org/v1/chat/completions";
+const B3IQ_ENDPOINT = "https://b3iq.org/v1/api/chat/completions";
 // Multi-node "Andromeda" Qwen3.6 35B route: the most reliable + capable chat
-// model on the network. See https://control-plane.b3iq.org/v1/models for the
-// live list; any served model id works.
+// model on the network. See https://b3iq.org/v1/api/models for the live list;
+// any served model id works.
 const DEFAULT_B3IQ_MODEL = "qwen3.6-35b-a3b";
 
 // Strip a <think>…</think> reasoning preamble (reasoning models emit one) so
