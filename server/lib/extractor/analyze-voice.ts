@@ -215,7 +215,6 @@ export async function analyzeVoice(
       llmConfig,
       [{ role: "user", content: prompt }],
       {
-        model: "qwen3.6-35b-a3b",
         temperature: 0.2,
         maxTokens: 2048,
       }

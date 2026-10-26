@@ -131,7 +131,6 @@ Produce exactly three sections, each a separate JSON string field. Return ONLY v
     llmConfig,
     [{ role: "user", content: prompt }],
     {
-      model: "qwen3.6-35b-a3b",
       temperature: 0.5,
       maxTokens: 2048,
     }
