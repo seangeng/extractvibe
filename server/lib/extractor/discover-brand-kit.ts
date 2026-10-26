@@ -324,7 +324,6 @@ async function extractGuidelines(
       llmConfig,
       [{ role: "user", content: prompt }],
       {
-        model: "qwen3.6-35b-a3b",
         temperature: 0.1,
         maxTokens: 2048,
       }

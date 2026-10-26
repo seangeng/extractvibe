@@ -466,8 +466,6 @@ apiRouter.get("/brand/:domain/design.md", async (c) => {
     const dm = await generateDesignMd(cachedKit, {
       llmConfig: {
         openRouterApiKey: c.env.OPENROUTER_API_KEY,
-        b3iqApiKey: c.env.B3IQ_API_KEY,
-        provider: c.env.LLM_PROVIDER,
       },
     });
     content = dm.content;
@@ -541,8 +539,6 @@ apiRouter.get("/extract/:jobId/export/:format", async (c) => {
       const dm = await generateDesignMd(kit, {
         llmConfig: {
           openRouterApiKey: c.env.OPENROUTER_API_KEY,
-          b3iqApiKey: c.env.B3IQ_API_KEY,
-          provider: c.env.LLM_PROVIDER,
         },
       });
       await c.env.CACHE.put(`design-md:${jobId}`, dm.content, { expirationTtl: 60 * 60 * 72 });

@@ -363,11 +363,8 @@ export async function synthesizeVibe(
       llmConfig,
       [{ role: "user", content: prompt }],
       {
-        model: "qwen3.6-35b-a3b",
         temperature: 0.4,
-        // Vibe output is ~700-1000 tokens in practice. Cap at 2048 so we
-        // fit Qwen's 4096-token context budget (prompt is ~1400 tokens),
-        // avoiding a 413 → Gemma-fallback round-trip on every call.
+        // Vibe output is ~700-1000 tokens; keep completion spend bounded.
         maxTokens: 2048,
       }
     );
